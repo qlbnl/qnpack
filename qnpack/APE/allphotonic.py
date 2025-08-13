@@ -1,0 +1,856 @@
+import os
+import json
+import netsquid as ns
+import numpy as np
+import logging
+import tracemalloc
+from matplotlib import pyplot as plt
+from matplotlib import rcParams
+import matplotlib.colors as mcolors
+from netsquid.qubits.qubitapi import assign_qstate
+from netsquid.qubits.operators import *
+from netsquid.components import ClassicalChannel, QuantumChannel
+from netsquid.components.models import FibreDelayModel
+from netsquid.nodes.network import Network
+from netsquid.components.switch import SimpleSwitch
+from netsquid.components.qprocessor import QuantumProcessor
+from netsquid.components.clock import Clock
+from qnpack.common.simulation import Simulation
+from qnpack.common.constants import Constants
+from qnpack.common.config import Config
+from qnpack.common.logging import setup_logging
+from qnpack.APE.lib.params import APEParams
+from qnpack.APE.lib.models import (
+    FibreDepolarizeModel,
+    BSMGatedQuantumDetector,
+    LeafPhotonicProcessing,
+    CorePhotonicProcessing,
+    MyFibreLossModel,
+    SPGatedQuantumDetector,
+    Level2CorePhotonicProcessing,
+    m_collector
+)
+from qnpack.APE.lib.protocols import (
+    setup_repeater_protocol,
+    CoreRecvProtocol,
+    GraphStateEmissionProtocol
+)
+from qnpack.APE.lib.programs import (
+    get_apeqr_node_instructions,
+    get_end_node_instructions,
+    rng_measure_mem
+)
+from qnpack.APE.lib.custom_errormodels import (
+    myT1T2NoiseModel,
+    my_apply_pauli_noise
+)
+from qnpack.APE.lib.drawGS import (
+    plot_qubit_graph,
+    pick_entangled_qubits
+)
+
+from qnpack.APE.lib.repeater_rate import (
+    cal_rate_from_data
+)
+
+log = logging.getLogger(__name__)
+
+
+class APESimulation(Simulation):
+    def __init__(self, num_repeaters, distances, iterations=None,min_successful=None, parameter_file=None, output_dir=None):
+        self.param_file = parameter_file or Constants.DEFAULT_OUTPUT_DIR
+        self.output_dir = output_dir or Constants.DEFAULT_OUTPUT_DIR
+        self.cfg = Config(parameter_file)
+        self.num_repeaters = num_repeaters
+        self.distances = distances
+        self.iterations = iterations or self.cfg.sim.iterations
+        self.min_successful=min_successful or self.cfg.sim.iterations
+        setup_logging(name=__name__,
+                      level=logging.DEBUG if self.cfg.sim.debug else logging.INFO)
+        log.info(f"Configuration:\n{self.cfg}")
+        os.makedirs(self.output_dir, exist_ok=True)
+
+        self.logical_z_fail_cnt = 0
+        self.logical_z_cnt = 0
+        self.logical_x_fail_cnt = 0
+        self.logical_x_cnt = 0
+
+        self.rng_noise = np.random.RandomState(0)
+        self.rng_loss = np.random.RandomState(0)
+        self.rng_measure = np.random.RandomState(0)
+
+
+    def start(self):
+        # starting memory tracing
+        tracemalloc.start()
+
+        ns.set_random_state()
+
+        total_fidelity_dict = {}
+        total_prob_dict = {}
+        total_elasped_time_dict = {}
+
+        log.info(f"Distances: {self.distances}")
+        log.info(f"Iterations: {self.iterations}")
+        log.info("Starting simulation ...")
+
+        for distance in self.distances:
+            log.info(f"\tRunning distance: {distance}, num repeaters: {self.num_repeaters} [{self.iterations} iters]")
+            fidelity_dict, prob_dict, elasped_time_dict, elasped_time_dict_per_run = self.cal_fidelity(total_num_repeater=None,
+                                                                                                       total_distance=distance,
+                                                                                                       num_rgs_branches_half=self.cfg.rgs.num_branches_half,
+                                                                                                       num_repeater_ls=self.num_repeaters,
+                                                                                                       seed=self.cfg.sim.starting_seed,
+                                                                                                       total_iteration=self.iterations,
+                                                                                                       min_successful_cnt=self.min_successful,
+                                                                                                       only_noise=False)
+            total_fidelity_dict[f"{distance}"] = fidelity_dict
+            total_prob_dict[f"{distance}"] = prob_dict
+            total_elasped_time_dict[f"{distance}"] = elasped_time_dict
+        
+        # plt.rc('font', size=12)  
+        # plt.rc('axes', titlesize=25)     # fontsize of the axes title
+        # plt.rc('axes', labelsize=25)
+        # plt.rc('legend', fontsize=20) 
+        
+        #fig, ax = plt.subplots()
+        #for dist, item in total_fidelity_dict.items():
+        #    keys = list(item.keys())
+        #    values = list(item.values())
+        #    ax.plot(keys,  values, color='b', label=f"{dist}km with (2,2,1) RGS")
+        #
+        #plt.xlabel("Number of repeaters")
+        #plt.ylabel("Fidelity")
+        #plt.title("Fidelity v.s. Number of Repeaters")
+        #plt.legend(loc='best')
+        #plt.show()
+
+        fig = plt.figure(figsize=plt.figaspect(0.5))
+        ax = fig.add_subplot(1, 2, 1)   
+        keys,sim_rate_list,exact_rate_list=cal_rate_from_data(total_prob_dict,m=self.cfg.rgs.num_branches_half,
+                                                              b0=self.cfg.rgs.b0,b1=self.cfg.rgs.b1,
+                                                              QFC_loss=self.cfg.emitter.QFC_loss,detector_eff=self.cfg.emitter.detector_eff,
+                                                              collection_eff=self.cfg.emitter.collection_eff)
+        ax.plot(keys, sim_rate_list, label=f"10km, Simulation repeater rate",linestyle='dashed',color='tab:blue')
+        #ax.plot(keys, exact_rate_list, label=f"10km, Theoretical repeater rate",color='tab:blue')
+        ax.set_xlabel("Number of repeaters")
+        ax.set_ylabel("Repeater rate (Hz)")
+        ax.legend(loc=7, bbox_to_anchor=(0.98,0.4), prop={'size': 10})
+        
+        ax = fig.add_subplot(1, 2, 2)
+        for dist, item in total_fidelity_dict.items():
+            keys = list(item.keys())
+            values = list(item.values())
+            ax.plot(keys,  values, color='b', label=f"{dist}km with {(self.cfg.rgs.num_branches_half,self.cfg.rgs.b0,self.cfg.rgs.b1)} RGS")
+        ax.set_xlabel("Number of repeaters")
+        ax.set_ylabel("Fidelity")
+        #plt.title("Repeater chain with different total lengths")
+        #plt.title("Fidelity v.s. Number of Repeaters")
+        ax.legend(loc='best')
+        plt.show()
+
+
+    def finalize(self):
+        # displaying the memory
+        current, peak = tracemalloc.get_traced_memory()
+        print("Current memory [MB]:", round(current/(1024*1024), 4), "Peak memory [MB]:", round(peak/(1024*1024), 4))
+
+        # stopping the library
+        tracemalloc.stop()
+
+    def apeqr_node_setup_withoutTree(self, node, qport_left_name, qport_right_name, apply_emitter_noise=False, rng_noise=None):
+        node.add_subcomponent(QuantumProcessor(name="qproc", num_positions=2,
+                                               fallback_to_nonphysical=False,
+                                               phys_instructions=get_apeqr_node_instructions(self.cfg,
+                                                                                             apply_emitter_noise,
+                                                                                             self.rng_noise)))
+        # Set up optical switch
+        switch = SimpleSwitch("switch", {'switch_out_left_leaf': 'switch_out_left_leaf', 'switch_out_left_core': 'switch_out_left_core',
+                                         'switch_out_right_leaf': 'switch_out_right_leaf', 'switch_out_right_core': 'switch_out_right_core',
+                                         'switch_in': 'switch_in'})
+        node.add_subcomponent(switch, name="switch")
+        # When photon is emitted from emitter, it comes out at qout port and enters switch_in port
+        node.qmemory.ports["qout0"].connect(switch.ports["switch_in"])
+        # Set up clock
+        clock = Clock("clock", frequency=1/APEParams.apeqr_clock_period(self.cfg))
+        node.add_subcomponent(clock, name="clock")
+
+        for dir in ["left", "right"]:
+            # Set up passive photonic quantum gate for leaf and core photons respectively
+            node.add_subcomponent(LeafPhotonicProcessing(name=f"leaf_photonic_processing_{dir}"))
+            node.add_subcomponent(CorePhotonicProcessing(
+                name=f"core_photonic_processing_{dir}", delay=APEParams.core_photon_delay(self.cfg)))
+            switch.ports[f"switch_out_{dir}_leaf"].connect(
+                node.subcomponents[f"leaf_photonic_processing_{dir}"].ports["send"])
+            switch.ports[f"switch_out_{dir}_core"].connect(
+                node.subcomponents[f"core_photonic_processing_{dir}"].ports["send"])
+            # Set up multiplexer
+            multiplexer = SimpleSwitch(f"multiplexer_{dir}", {'switch_out': 'switch_out', 'switch_in_leaf': 'switch_out',
+                                                              'switch_in_core': 'switch_out'})
+            if dir == "left":
+                node.add_subcomponent(multiplexer, name=f"multiplexer_{dir}", forward_output=[
+                    (qport_left_name, "switch_out")])
+            else:
+                node.add_subcomponent(multiplexer, name=f"multiplexer_{dir}", forward_output=[
+                    (qport_right_name, "switch_out")])
+            multiplexer.ports["switch_in_leaf"].connect(
+                node.subcomponents[f"leaf_photonic_processing_{dir}"].ports["recv"])
+            multiplexer.ports["switch_in_core"].connect(
+                node.subcomponents[f"core_photonic_processing_{dir}"].ports["recv"])
+
+    def apeqr_node_setup(self, node, qport_left_name, qport_right_name, apply_emitter_noise=False, rng_noise=None, rng_measure=None):
+        qproc = QuantumProcessor(name=f"{node.name}_qproc", num_positions=3,
+                                 fallback_to_nonphysical=False,
+                                 phys_instructions=get_apeqr_node_instructions(self.cfg, apply_emitter_noise, rng_noise, rng_measure))
+        node.add_subcomponent(qproc)
+        qproc.add_property(name="emitted_photon_cnt", value=0, value_type=int)
+        # Set up optical switch
+        switch = SimpleSwitch("switch", {'switch_out_left_leaf': 'switch_out_left_leaf', 'switch_out_left_level1_core': 'switch_out_left_level1_core',
+                                         'switch_out_left_level2_core': 'switch_out_left_level2_core', 'switch_out_right_leaf': 'switch_out_right_leaf', 'switch_out_right_level1_core': 'switch_out_right_level1_core',
+                                         'switch_out_right_level2_core': 'switch_out_right_level2_core', 'switch_in': 'switch_in'})
+        node.add_subcomponent(switch, name="switch")
+        # When photon is emitted from emitter, it comes out at qout port and enters switch_in port
+        node.qmemory.ports["qout0"].connect(switch.ports["switch_in"])
+        # Set up clock
+        clock = Clock("clock", frequency=1/APEParams.apeqr_clock_period(self.cfg))
+        node.add_subcomponent(clock, name="clock")
+
+        for dir in ["left", "right"]:
+            # Set up passive photonic quantum gate for leaf and core photons respectively
+            node.add_subcomponent(LeafPhotonicProcessing(name=f"leaf_photonic_processing_{dir}"))
+            node.add_subcomponent(CorePhotonicProcessing(
+                name=f"level1_core_photonic_processing_{dir}", delay=APEParams.core_photon_delay(self.cfg)))
+            node.add_subcomponent(Level2CorePhotonicProcessing(
+                name=f"level2_core_photonic_processing_{dir}", delay=APEParams.core_photon_delay(self.cfg)))
+            switch.ports[f"switch_out_{dir}_leaf"].connect(
+                node.subcomponents[f"leaf_photonic_processing_{dir}"].ports["send"])
+            switch.ports[f"switch_out_{dir}_level1_core"].connect(
+                node.subcomponents[f"level1_core_photonic_processing_{dir}"].ports["send"])
+            switch.ports[f"switch_out_{dir}_level2_core"].connect(
+                node.subcomponents[f"level2_core_photonic_processing_{dir}"].ports["send"])
+            # Set up multiplexer
+            multiplexer = SimpleSwitch(f"multiplexer_{dir}", {'switch_out': 'switch_out', 'switch_in_leaf': 'switch_out',
+                                                              'switch_in_level1_core': 'switch_out', 'switch_in_level2_core': 'switch_out'})
+            if dir == "left":
+                node.add_subcomponent(multiplexer, name=f"multiplexer_{dir}", forward_output=[
+                    (qport_left_name, "switch_out")])
+            else:
+                node.add_subcomponent(multiplexer, name=f"multiplexer_{dir}", forward_output=[
+                    (qport_right_name, "switch_out")])
+            multiplexer.ports["switch_in_leaf"].connect(
+                node.subcomponents[f"leaf_photonic_processing_{dir}"].ports["recv"])
+            multiplexer.ports["switch_in_level1_core"].connect(
+                node.subcomponents[f"level1_core_photonic_processing_{dir}"].ports["recv"])
+            multiplexer.ports["switch_in_level2_core"].connect(
+                node.subcomponents[f"level2_core_photonic_processing_{dir}"].ports["recv"])
+
+    def measurement_node_setup(self, node, qport_left_name, qport_right_name, end_node_dir=None,
+                               rng_measure=None, is_forced_outcome=False):
+        bsm_detector = BSMGatedQuantumDetector(f'bsm_detector_{node.name}',
+                                               detection_window=self.cfg.bsm.detection_window,
+                                               num_input_ports=2, num_output_ports=2,
+                                               end_node_dir=end_node_dir,
+                                               rng_measure=rng_measure,
+                                               is_forced_outcome=is_forced_outcome)
+        node.add_subcomponent(bsm_detector, 'bsm_detector')
+        for dir in ["left", "right"]:
+            # Set up optical switches to separate leaf and core photons
+            switch = SimpleSwitch(f"switch_{dir}",
+                                  {"switch_out_leaf": "switch_out_leaf", "switch_out_core_Z": "switch_out_core_Z",
+                                   "switch_out_core_X": "switch_out_core_X", "switch_out_core_X_level1": "switch_out_core_X_level1",
+                                   "switch_in": "switch_in"})
+            switch.topology = {"switch_in": "switch_out_leaf"}
+
+            if dir == "left":
+                node.add_subcomponent(switch, name=f"switch_{dir}", forward_input=[(qport_left_name, "switch_in")])
+                switch.ports['switch_out_leaf'].connect(bsm_detector.ports["qin0"])
+            else:
+                node.add_subcomponent(switch, name=f"switch_{dir}", forward_input=[(qport_right_name, "switch_in")])
+                switch.ports['switch_out_leaf'].connect(bsm_detector.ports["qin1"])
+            # Set up single-photon detector for core photons
+            single_detector_Z = SPGatedQuantumDetector(
+                f"single_detector_Z_{dir}_{node.name}", detection_window=self.cfg.spd.detection_window,
+                observable=Z, rng_measure=rng_measure, is_forced_outcome=is_forced_outcome)
+            single_detector_X = SPGatedQuantumDetector(
+                f"single_detector_X_{dir}_{node.name}", detection_window=self.cfg.spd.detection_window,
+                observable=X, rng_measure=rng_measure, phase_gate=False, is_forced_outcome=is_forced_outcome)
+            single_detector_X_level1 = SPGatedQuantumDetector(
+                f"single_detector_X_level1_{dir}_{node.name}", detection_window=self.cfg.spd.detection_window,
+                observable=X, rng_measure=rng_measure, phase_gate=True, is_forced_outcome=is_forced_outcome)
+            node.add_subcomponent(single_detector_Z, name=f"single_detector_Z_{dir}")
+            node.add_subcomponent(single_detector_X, name=f"single_detector_X_{dir}")
+            node.add_subcomponent(single_detector_X_level1, name=f"single_detector_X_level1_{dir}")
+            switch.ports['switch_out_core_Z'].connect(single_detector_Z.ports["qin0"])
+            switch.ports['switch_out_core_X'].connect(single_detector_X.ports["qin0"])
+            switch.ports['switch_out_core_X_level1'].connect(single_detector_X_level1.ports["qin0"])
+
+    def end_node_setup(self, node, qport_name, num_matter_qubit, apply_memory_noise=False):
+        # 2-qubit linear graph state
+        # two_cluster_stab = StabRepr(check_matrix=[[1, 0,0,1],[0,1,1,0]], phases=[1,1])
+        # state_sampler = StateSampler([two_cluster_stab], [1.0])
+
+        # Set up clock
+        clock = Clock("clock", frequency=1/APEParams.apeqr_clock_period(self.cfg))
+        node.add_subcomponent(clock, name="clock")
+
+        # Set up matter qubits:
+        if apply_memory_noise:
+            # Later verify different apeqr node noise use same rng_noise
+            memory_noise_model = myT1T2NoiseModel(T1=self.cfg.emitter.memory_T1,
+                                                  T2=self.cfg.emitter.memory_T2,
+                                                  my_rng=self.rng_noise)
+
+            qproc = QuantumProcessor(f"{node.name}_qproc", num_positions=num_matter_qubit, mem_noise_models=memory_noise_model,
+                                     fallback_to_nonphysical=False, phys_instructions=get_end_node_instructions(self.cfg, self.rng_noise))
+        else:
+            qproc = QuantumProcessor(f"{node.name}_qproc", num_positions=num_matter_qubit,
+                                     fallback_to_nonphysical=False, phys_instructions=get_end_node_instructions(self.cfg, self.rng_noise))
+        node.add_subcomponent(qproc)
+        qproc.add_property(name="emitted_photon_cnt", value=0, value_type=int)
+        # print("matter qubits:",node.qmemory.peek([0,1,2]))
+        # Set up multiplexer
+        topology_dict = {f"switch_in_{i}": "switch_out" for i in range(num_matter_qubit)}
+        topology_dict["switch_out"] = "switch_out"
+        multiplexer = SimpleSwitch("multiplexer", topology=topology_dict)
+        node.add_subcomponent(multiplexer, name="multiplexer", forward_output=[(qport_name, "switch_out")])
+
+        # Connect ports between QProcessor and multiplexer
+        for i in range(num_matter_qubit):
+            node.qmemory.ports[f"qout{i}"].connect(multiplexer.ports[f"switch_in_{i}"])
+
+    def network_setup(self, total_num_repeater=None, total_distance=20, num_repeater=2,
+                      num_rgs_branches_half=3, p_depol_init=0, p_depol_length=0,
+                      seed=None, apply_emitter_noise=False, apply_memory_noise=False,
+                      apply_fibre_loss=False, discard=True, rng_noise=None, rng_measure=None,
+                      rng_loss=None, is_forced_outcome=False, hide_fixed_photons=False, is_one_end_noise=False):
+        """Calculate average fidelity on repeater chain network.
+
+        Parameters
+        ----------
+        total_num_repeater : int 
+            Total number of repeater. If not None, num_repeaters is the segments of repeater chain out of the total number. 
+
+        total_distance: int
+            Total distance between two end nodes in km.     
+
+        num_repeater : int
+            Number of repeater in the repeater chains simulation
+
+        num_rgs_branches_half : int
+            One half of the total number of branches of RGS. 
+
+        p_depol_init: float
+            Not in use now.
+
+        p_depol_length : float
+            Not in use now.
+
+        seed : int
+            Current seed for random number generator to use for reproducibility
+
+        apply_emitter_noise : bool
+            Whether to apply emitter noise in each APE QR node during RGS generation
+
+        apply_memory_noise : bool
+            Whether to apply noise in memory qubits in each end node 
+
+        apply_fibre_loss : bool
+            Whether to apply fibre loss in each qchannel
+
+        discard : bool
+            Whether to perform the discard() method to the lost qubit. In STAB repr, it is equivalent to Z measurement with unrevealed outcome
+
+        rng_noise : 
+            RNG for emitter noise and memory noise 
+
+        rng_measure : 
+            RNG for matter qubit measurements and photonic measurements
+
+        rng_loss : 
+            RNG for photon loss
+
+        is_forced_outcome : bool
+            This is set to True for the noiseless case and under assumption that previous measurement outcomes of the case with noise has 
+            stored all measursements outcomes in the Protocol.
+
+        hide_fixed_photons : bool
+            This is set to True for the noiseless case. Lost photons will only be hide in the background instead of being discard.
+
+        is_one_end_noise : bool
+            Whether to turn off the decoherence noise of memory qubits of the right end node.
+            This is set to True when approximating a repeater chain with total length 2x by two repeater chains with total length x.
+
+        """
+
+        # print("discard inside network_setup",discard)
+        if total_num_repeater == None:  # Fix total distance and calculate node distance by num_repeater
+            node_distance = round(total_distance/((num_repeater+1)*2), 5)
+            # print("node_distance",node_distance)
+        else:  # Fix total_num_repeater and calculate node distance by total_num_repeater
+            assert total_num_repeater >= num_repeater, "num_repeater is larger than total_num_repeater"
+            node_distance = round(total_distance/((total_num_repeater+1)*2), 5)
+        if apply_emitter_noise or p_depol_init or p_depol_length:
+            name = f"Repeater_network_{total_distance}_{num_repeater}_noise"
+        else:
+            name = f"Repeater_network_{total_distance}_{num_repeater}_noiseless"
+        network = Network(name)
+        # Set up nodes of the repeater chain
+        node_a, node_b = network.add_nodes(["node_a", "node_b"])
+        bsm_nodes = []
+        ape_nodes = []
+        for i in range(num_repeater):
+            node_bsm, node_ape = network.add_nodes([f"node_bsm{i}", f"node_ape{i}"])
+            bsm_nodes.append(f"bsm{i}")
+            ape_nodes.append(f"ape{i}")
+        network.add_nodes([f"node_bsm{num_repeater}"])
+        bsm_nodes.append(f"bsm{num_repeater}")
+        end_ape_nodes = ["a"]+ape_nodes+["b"]
+
+        # Set up cchannel from bsm node 0 to node b to represents the longest way of announcing measurement results
+        cchannel_measurement_result = ClassicalChannel(
+            f"CChannel_bsm0->b", length=total_distance-node_distance, models={"delay_model": FibreDelayModel()})
+        network.add_connection(network.get_node("node_bsm0"), network.get_node("node_b"), channel_to=cchannel_measurement_result, label="result",
+                               port_name_node1="cport_to_node_b", port_name_node2="cport_receive_result")
+
+        for i in range(len(bsm_nodes)):
+            left = end_ape_nodes[i]
+            middle = bsm_nodes[i]
+            right = end_ape_nodes[i+1]
+            left_node = network.get_node(f"node_{left}")
+            middle_node = network.get_node(f"node_{middle}")
+            right_node = network.get_node(f"node_{right}")
+
+            # Setup 1-way clock connections to each bsm node from left node
+            cchannel_clock_lm = ClassicalChannel(
+                f"CChannel_clock_{left}->{middle}", length=node_distance, models={"delay_model": FibreDelayModel()})
+            network.add_connection(middle_node, left_node, channel_from=cchannel_clock_lm, label="clock",
+                                   port_name_node1="cport_clock_from_left", port_name_node2="cport_clock_to_right")
+
+            fiber_loss_model = MyFibreLossModel(discard=discard, rng=rng_loss,
+                                                hide_fixed_photons=hide_fixed_photons,
+                                                p_loss_init=APEParams.p_loss_init(self.cfg),
+                                                p_loss_length=self.cfg.network.photon_loss)
+            
+            fiber_depol_model = FibreDepolarizeModel(p_depol_init=p_depol_init,
+                                                     p_depol_length=p_depol_length,
+                                                     rng_noise=rng_noise)
+
+            # Setup 1-way quantum channels to each bsm node from left node
+            if apply_fibre_loss:
+                qchannel_lm = QuantumChannel(f"QChannel_{left}->{middle}", length=node_distance,
+                                             models={"quantum_loss_model": fiber_loss_model,
+                                                     "quantum_noise_model": fiber_depol_model,
+                                                     "delay_model": FibreDelayModel()})
+            else:
+                qchannel_lm = QuantumChannel(f"QChannel_{left}->{middle}", length=node_distance,
+                                             models={"quantum_noise_model": fiber_depol_model,
+                                                     "delay_model": FibreDelayModel()})
+
+            network.add_connection(middle_node, left_node, channel_from=qchannel_lm, label="quantum",
+                                   port_name_node1=f"qport_{middle}_{left}", port_name_node2=f"qport_{left}_{middle}")
+
+            # Setup 1-way clock connections to each bsm node from right node
+            cchannel_clock_rm = ClassicalChannel(
+                f"CChannel_clock_{right}->{middle}", length=node_distance, models={"delay_model": FibreDelayModel()})
+            network.add_connection(middle_node, right_node, channel_from=cchannel_clock_rm, label="clock",
+                                   port_name_node1="cport_clock_from_right", port_name_node2="cport_clock_to_left")
+
+            # Setup 1-way quantum channels to each bsm node from right node
+            if apply_fibre_loss:
+                qchannel_rm = QuantumChannel(f"QChannel_{right}->{middle}", length=node_distance,
+                                             models={"quantum_loss_model": fiber_loss_model,
+                                                     "quantum_noise_model": fiber_depol_model,
+                                                     "delay_model": FibreDelayModel()})
+            else:
+                qchannel_rm = QuantumChannel(f"QChannel_{right}->{middle}", length=node_distance,
+                                             models={"quantum_noise_model": fiber_depol_model,
+                                                     "delay_model": FibreDelayModel()})
+            network.add_connection(middle_node, right_node, channel_from=qchannel_rm, label="quantum",
+                                   port_name_node1=f"qport_{middle}_{right}", port_name_node2=f"qport_{right}_{middle}")
+
+            # Setup modules inside measurement nodes. If measurement node is connected to end node, BSM would not implement Rx gate on arrived photon from end node.
+            if i == 0:
+                end_node_dir = "left"
+            elif i == len(bsm_nodes)-1:
+                end_node_dir = "right"
+            else:
+                end_node_dir = None
+            # print(f"i={i},end_node_dir={end_node_dir}")
+            self.measurement_node_setup(middle_node, qport_left_name=f"qport_{middle}_{left}",
+                                        qport_right_name=f"qport_{middle}_{right}",
+                                        end_node_dir=end_node_dir, rng_measure=rng_measure,
+                                        is_forced_outcome=is_forced_outcome)
+
+            # Setup modules inside apeqr (all-photonic entanglement-based quantum repeater) nodes and left end nodes
+            # print("num_rgs_branches_half in network setup",num_rgs_branches_half)
+            if i == 0:
+                self.end_node_setup(left_node, qport_name=f"qport_{left}_{middle}",
+                                    num_matter_qubit=num_rgs_branches_half,
+                                    apply_memory_noise=apply_memory_noise)
+            else:
+                self.apeqr_node_setup(left_node, qport_left_name=f"qport_{left}_bsm{i-1}",
+                                      qport_right_name=f"qport_{left}_bsm{i}",
+                                      apply_emitter_noise=apply_emitter_noise,
+                                      rng_noise=rng_noise, rng_measure=rng_measure)
+
+            # Setup modules inside right end nodes
+            if i == len(bsm_nodes)-1:
+                if is_one_end_noise:  # Node b has no decoherence
+                    self.end_node_setup(right_node, qport_name=f"qport_{right}_{middle}",
+                                        num_matter_qubit=num_rgs_branches_half)
+                else:
+                    self.end_node_setup(right_node, qport_name=f"qport_{right}_{middle}",
+                                        num_matter_qubit=num_rgs_branches_half,
+                                        apply_memory_noise=apply_memory_noise)
+
+        return network, bsm_nodes, ape_nodes, end_ape_nodes
+
+    def collect_statistic(self, network, num_repeater, seed):
+        """Calculate average fidelity on repeater chain network.
+
+        Parameters
+        ----------
+        network : 
+            Network instance in NetSquid
+
+        num_repeater : int
+            Number of repeater in the repeater chains 
+
+        seed : int
+            Current seed for random number generator to use for reproducibility
+
+
+        Returns
+        -------
+        repeater_chain_success: bool
+            Boolean indicating whether the whole repeater chain scheme succeeds or fails
+
+        data: dict
+            If the repeater scheme succeeds, it stores the QRepr and Qubits of the entangled Bell pair across two end nodes. 
+            It also stores the measurement outcomes of matter qubits during RGS generation and the measurement outcomes in the measurement nodes
+
+        logical_prob: dict
+            For dubugging purpose. Stores the logical X/Z failed count and total counts of the logical core qubits of each BSM nodes.
+
+        """
+        all_bsm_success = True
+        all_spd_success = True
+        # all_spd_success=True
+        data = {}
+        logical_prob = (CoreRecvProtocol.logical_x_fail_cnt, CoreRecvProtocol.logical_x_cnt,
+                        CoreRecvProtocol.logical_z_fail_cnt, CoreRecvProtocol.logical_z_cnt)
+
+        for key, value in CoreRecvProtocol.PostProcessingResult.items():
+            if value[0] == False:
+                # print("At least one BSM node with all BSM failed")
+                all_bsm_success = False
+            if value[2] == False:
+                all_spd_success = False
+            if (not all_bsm_success) and (not all_spd_success):
+                break
+
+        repeater_chain_success = all_bsm_success and all_spd_success
+        if repeater_chain_success:
+            _, bsm_outcomes, _, _ = CoreRecvProtocol.PostProcessingResult['CRPR_bsm0']
+            # print("bsm_outcomes inside collect_statistic",bsm_outcomes)
+            node_a_1st_successful_index = 0
+            node_b_1st_successful_index = 0
+            verify_a_successful = False
+            verify_b_successful = False
+
+            for i in range(len(bsm_outcomes)):
+                if bsm_outcomes[i] == 0 or bsm_outcomes[i] == 1:
+                    node_a_1st_successful_index = i
+                    verify_a_successful = True
+                    break
+
+            _, bsm_outcomes, _, _ = CoreRecvProtocol.PostProcessingResult[f'CRPL_bsm{num_repeater}']
+            for i in range(len(bsm_outcomes)):
+                if bsm_outcomes[i] == 0 or bsm_outcomes[i] == 1:
+                    node_b_1st_successful_index = i
+                    verify_b_successful = True
+                    break
+            assert verify_a_successful & verify_b_successful, "All_bsm_success is True but could not find sucessful bsm outcome in end nodes"
+
+            # print("node_a_1st_successful_index",node_a_1st_successful_index,"node_b_1st_successful_index",node_b_1st_successful_index)
+            a_matter_qubits = network.get_node("node_a").qmemory.peek(list(range(self.cfg.rgs.num_branches_half)))
+            b_matter_qubits = network.get_node("node_b").qmemory.peek(list(range(self.cfg.rgs.num_branches_half)))
+            a_successful_qubit = a_matter_qubits[node_a_1st_successful_index]
+            b_successful_qubit = b_matter_qubits[node_b_1st_successful_index]
+
+            # print("all matter qubits in node a:",a_matter_qubits)
+            # for qubit in a_matter_qubits:
+            #    print(qubit,pick_entangled_qubits(qubit))
+            # print("all matter qubits in node b:",b_matter_qubits)
+            # for qubit in b_matter_qubits:
+            #    print(qubit,pick_entangled_qubits(qubit))
+
+            # Assert that the first successful matter qubit in node a is only entangled with the first successful matter in node b
+            picked_qstate_a, picked_qubits_a = pick_entangled_qubits(a_successful_qubit)
+            try:
+                assert picked_qstate_a.num_qubits == 2, f"seed {seed}:First successful matter qubit in node a is entangled with >1 qubit"
+                assert picked_qubits_a[1] == b_successful_qubit, f"seed {seed}:First successful matter qubits in node a and b are not entangled"
+            except AssertionError as e:
+                with open(error_f, 'a') as f:
+                    f.write(f'Assertion failed at the {str(e)} line')
+                    f.write(f'picked_qstate_a: {picked_qstate_a}')
+                    f.write(f'picked_qubits_a: {picked_qubits_a}')
+                repeater_chain_success = False
+
+            data["qrepr"] = picked_qstate_a
+            data["qubit"] = picked_qubits_a
+            data["GSEP_result"] = GraphStateEmissionProtocol.PostProcessingResult.copy()
+            data["CRP_result"] = CoreRecvProtocol.PostProcessingResult.copy()
+        else:
+            data["qrepr"] = "At least one measurement node has all BSM failed or at least one core qubit measurement is failed."
+            data["qubit"] = "At least one measurement node has all BSM failed or at least one core qubit measurement is failed."
+            data["GSEP_result"] = GraphStateEmissionProtocol.PostProcessingResult.copy()
+            data["CRP_result"] = CoreRecvProtocol.PostProcessingResult.copy()
+        return repeater_chain_success, data, logical_prob
+
+    def cal_fidelity(self, total_num_repeater, total_distance, num_rgs_branches_half, num_repeater_ls, seed,
+                     total_iteration, min_successful_cnt=0, only_noise=True):
+        """Calculate average fidelity on repeater chain network. 
+        Across a fixed total distance, for each number of repeater, a network with noise and a network without noise are first set up. 
+        When the repeater chain scheme is successful on the network with noise, measurement outcomes would be fed into the noiseless network
+        to calculate the expected noiseless Bell pair. Memory noise is applied explicitly here on the memory qubits in 
+        the two end nodes according to the time required for classical message to transfer from the leftmost BSM node to the right end node.
+        Fidelity of the Bell pair under noise is computed w.r.t. to the expected noiseless Bell pair. 
+
+        Parameters
+        ----------
+        total distance : int
+            Total distance between two end nodes 
+
+        seed : int
+            Starting seed for random number generator to use for reproducibility
+
+        total_iteration : int
+            Total number to run the repeater simulation. Each run would increment the seed by 1. 
+
+        min_successful_cnt : int, optional
+            Successful number of BSM scheme to run the repeater simulation until it stops. When min_successful_cnt>0, it keeps running even the 
+            number of count exceeds total_iteration until successful_cnt>=min_successful_cnt
+
+        Returns
+        -------
+        fidelity_dict: dict 
+            Dictionary holding the average fidelity
+
+        prob_dict: dict
+            Dictionary holding the total counts and successful counts for each number of repeater 
+
+        elasped_time_dict: dict
+            Dictionary holding the total elapsed time 
+
+        elasped_time_dict_per_run: dict 
+            Dictionary holding the elapsed time per iteration
+
+        """
+        is_one_end_noise = self.cfg.sim.is_one_end_noise
+        fidelity_dict = {}
+        prob_dict = {}
+        debug_dict = {}
+        elasped_time_dict = {}
+        elasped_time_dict_per_run = {}
+        mismatch_dict = {}
+        for num_repeater in num_repeater_ls:
+            cnt = 0
+            successful_cnt = 0
+            meas_mismatch_cnt = 0
+            fidelity_ls = []
+            elasped_time_dict[num_repeater] = 0
+            # repeater graph state has rgs_size leaf photons and rgs_size core photons, total number of photon=2*rgs_size
+            rgs_size = 2*num_rgs_branches_half
+            # with open(debug_f, 'a') as f:
+            #     f.write(f'total_distance: {total_distance},num_repeater:{num_repeater} \n')
+            log.info(f"\t\ttotal_distance: {total_distance}, num_repeater: {num_repeater}")
+            # ns.sim_reset()
+            ns.set_qstate_formalism(ns.QFormalism.STAB)
+            network_noise, bsm_nodes_noise, ape_nodes_noise, end_ape_nodes_noise = self.network_setup(
+                total_num_repeater=total_num_repeater, total_distance=total_distance, num_repeater=num_repeater,
+                num_rgs_branches_half=num_rgs_branches_half, apply_fibre_loss=True,
+                discard=True, hide_fixed_photons=False, apply_emitter_noise=True, apply_memory_noise=True,
+                rng_noise=self.rng_noise, rng_measure=self.rng_measure, rng_loss=self.rng_loss, is_forced_outcome=False,
+                is_one_end_noise=is_one_end_noise)
+            protocol_noise = setup_repeater_protocol(self.cfg, network_noise, bsm_nodes_noise,
+                                                     ape_nodes_noise, end_ape_nodes_noise,
+                                                     rgs_size, num_repeater)
+
+            network, bsm_nodes, ape_nodes, end_ape_nodes = self.network_setup(
+                total_num_repeater=total_num_repeater, total_distance=total_distance, num_repeater=num_repeater,
+                num_rgs_branches_half=num_rgs_branches_half, apply_fibre_loss=True,
+                discard=False, hide_fixed_photons=True, apply_emitter_noise=False,
+                apply_memory_noise=False, rng_noise=self.rng_noise, rng_measure=self.rng_measure,
+                rng_loss=self.rng_loss, is_forced_outcome=True, is_one_end_noise=is_one_end_noise)
+            protocol = setup_repeater_protocol(self.cfg, network, bsm_nodes, ape_nodes, end_ape_nodes,
+                                               rgs_size, num_repeater)
+
+            # print("protocol",protocol,"protocol_noise:",protocol_noise)
+            while cnt < total_iteration or successful_cnt < min_successful_cnt:
+                """When ns.sim_time()>2.9E9, all subsequent iterations would have identical results due to unknown reason.
+                Hence we reset the simulation time and define the networks and protocols again whenever ns.sim_time()>1E9 
+                """
+                if ns.sim_time() > 1E9:
+                    ns.sim_reset()
+                    network_noise, bsm_nodes_noise, ape_nodes_noise, end_ape_nodes_noise = self.network_setup(
+                        total_num_repeater=total_num_repeater, total_distance=total_distance, num_repeater=num_repeater,
+                        num_rgs_branches_half=num_rgs_branches_half, apply_fibre_loss=True,
+                        discard=True, hide_fixed_photons=False, apply_emitter_noise=True, apply_memory_noise=True,
+                        rng_noise=self.rng_noise, rng_measure=self.rng_measure, rng_loss=self.rng_loss,
+                        is_forced_outcome=False, is_one_end_noise=is_one_end_noise)
+                    protocol_noise = setup_repeater_protocol(self.cfg, network_noise, bsm_nodes_noise, ape_nodes_noise,
+                                                             end_ape_nodes_noise, rgs_size, num_repeater)
+
+                    network, bsm_nodes, ape_nodes, end_ape_nodes = network_setup(
+                        total_num_repeater=total_num_repeater, total_distance=total_distance, num_repeater=num_repeater,
+                        num_rgs_branches_half=num_rgs_branches_half, apply_fibre_loss=True,
+                        discard=False, hide_fixed_photons=True, apply_emitter_noise=False, apply_memory_noise=False,
+                        rng_noise=self.rng_noise, rng_measure=self.rng_measure, rng_loss=self.rng_loss, is_forced_outcome=True,
+                        is_one_end_noise=is_one_end_noise)
+                    protocol = setup_repeater_protocol(self.cfg, network, bsm_nodes, ape_nodes,
+                                                       end_ape_nodes, rgs_size, num_repeater)
+
+                m_collector.reset()  # Reset m_collector which is used to force measurement outcomes of noise case to noiseless case
+                MyFibreLossModel.lost_photon_ls = []  # Reset the list to store the lost photons during the noise case
+                repeater_chain_success_noise, data_noise, logical_prob_noise, elapsed_time_noise = self.run_protocol_once(
+                    network_noise, protocol_noise, seed, num_repeater)
+                elasped_time_dict[num_repeater] += elapsed_time_noise
+                elasped_time_dict_per_run[f'{num_repeater}_noise'] = elapsed_time_noise
+                log.debug(f"Lost photons: {MyFibreLossModel.lost_photon_ls}")
+                # with open(debug_f, 'a') as f:
+                # debug.write(f'Seed:{seed},With noise:{repeater_chain_success_noise},{data_noise["qrepr"]},{data_noise["CRP_result"]},{data_noise["GSEP_result"]}')
+                #    f.write(f'{ns.sim_time()} \n')
+                #    f.write(f'{ns.sim_time():.1f} \n')
+                #    f.write(f'Seed:{seed},With noise:{repeater_chain_success_noise},{data_noise["qrepr"]},{data_noise["CRP_result"]} \n')
+
+                # print("Seed",seed,"With noise:",repeater_chain_success_noise,data_noise["qrepr"],data_noise["CRP_result"],data_noise["GSEP_result"])
+
+                if repeater_chain_success_noise:
+                    if not only_noise:
+                        repeater_chain_success_noiseless, data_noiseless, logical_prob_noiseless, elapsed_time_noiseless = self.run_protocol_once(
+                            network, protocol, seed, num_repeater)
+                        elasped_time_dict[num_repeater] += elapsed_time_noiseless
+                        elasped_time_dict_per_run[f'{num_repeater}_noiseless'] = elapsed_time_noiseless
+                        # with open(debug_f, 'a') as f:
+                        # debug.write(f'Seed:{seed},Noiseless:{repeater_chain_success_noiseless},{data_noiseless["qrepr"]},{data_noiseless["CRP_result"]},{data_noiseless["GSEP_result"]}')
+                        # f.write(f'{ns.sim_time():.1f} \n')
+                        # f.write(f'Seed:{seed},Noiseless:{repeater_chain_success_noiseless},{data_noiseless["qrepr"]},{data_noiseless["CRP_result"]} \n')
+                        # print("Seed",seed,"Noiseless:",repeater_chain_success_noiseless,data_noiseless["qrepr"],data_noiseless["CRP_result"],data_noiseless["GSEP_result"])
+                        qrepr_noiseless = data_noiseless["qrepr"]
+                        # Assume in discard photon case, qstate must consist of 2 qubits?
+                        qrepr_noise = data_noise["qrepr"]
+
+                        # Apply memory noise during measurement outcome anouncement
+                        memory_a, memory_b = ns.qubits.create_qubits(2)
+                        assign_qstate([memory_a, memory_b], qrepr=qrepr_noise)
+                        node_distance = round(total_distance/(2*num_repeater+2), 5)
+                        message_time = (total_distance-node_distance)/200000 * \
+                            1E9  # From leftmost BSM node to the right node
+                        dp = np.exp(-message_time / self.cfg.emitter.memory_T2)
+                        probZ = (1 - dp) / 2
+
+                        my_apply_pauli_noise(memory_a, (1-probZ, 0, 0, probZ), my_rng=self.rng_noise)
+                        if not is_one_end_noise:
+                            my_apply_pauli_noise(memory_b, (1-probZ, 0, 0, probZ), my_rng=self.rng_noise)
+
+                        try:
+                            fidelity = qrepr_noise.fidelity(qrepr_noiseless, squared=True)
+                            fidelity_ls.append(fidelity)
+                            successful_cnt += 1
+                            # Plot the entangled state here
+                            # plot_qubit_graph(data_noiseless["qubit"])
+                            # pick_entangled_qubits(data_noise["qubit"])
+                            if m_collector.is_meas_mismatch:
+                                meas_mismatch_cnt += 1
+                                # print("meas mismatch at seed",seed,"fidelity=",fidelity)
+                                mismatch_dict[str(seed)] = fidelity
+                        except TypeError as e:
+                            with open(error_f, 'a') as f:
+                                f.write(
+                                    f'Seed:{seed},Noise:{repeater_chain_success_noise},{data_noise["qrepr"]},{data_noise["CRP_result"]} \n')
+                                f.write(
+                                    f'Seed:{seed},Noiseless:{repeater_chain_success_noiseless},{data_noiseless["qrepr"]},{data_noiseless["CRP_result"]} \n')
+                                f.write(f'{MyFibreLossModel.lost_photon_ls} \n')
+                    else:
+                        successful_cnt += 1
+                        # if m_collector.is_meas_mismatch:
+                        #    meas_mismatch_cnt+=1
+                        #    mismatch_dict[str(seed)]=fidelity
+
+                seed += 1
+                cnt += 1
+                if cnt % 100 == 0:
+                    # with open(debug_f, 'a') as f:
+                    #     f.write(f"cnt:{cnt},successful_cnt:{successful_cnt},meas_mismatch_cnt:{meas_mismatch_cnt} \n")
+                    #     f.write(f"fidelity: {np.average(fidelity_ls)} \n")
+                    log.info(f"\t\tcnt:{cnt},successful_cnt:{successful_cnt},meas_mismatch_cnt:{meas_mismatch_cnt}")
+                    log.info(f"\t\tfidelity: {np.average(fidelity_ls)}")
+
+            # fidelity_dict[num_repeater] = (np.average(fidelity_ls),successful_cnt/cnt)
+            if not only_noise and successful_cnt > 0:
+                fidelity_dict[num_repeater] = np.average(fidelity_ls)
+                log.info(f"\t\tfidelity_dict: {fidelity_dict}")
+
+            prob_dict[num_repeater] = (cnt, successful_cnt)
+            # with open(debug_f, 'a') as f:
+            #     f.write(
+            #         f"cnt:{cnt},successful_cnt:{successful_cnt},successful_prob:{successful_cnt/cnt},meas_mismatch_cnt:{meas_mismatch_cnt} \n")
+            #     f.write(f"{fidelity_dict}")
+            log.info(f"\t\tcnt: {cnt}, successful_cnt: {successful_cnt}, successful_prob: {successful_cnt/cnt}, meas_mismatch_cnt: {meas_mismatch_cnt}")
+
+        # print("logical x prob",1-debug_noise[0]/debug_noise[1],"logical z prob",1-debug_noise[2]/debug_noise[3])
+        return fidelity_dict, prob_dict, elasped_time_dict, elasped_time_dict_per_run
+
+    def run_protocol_once(self, network, protocol, seed, num_repeater):
+        """To run the protocol on the network once
+        """
+        # print(f"{ns.sim_time():.1f}: Inside run_protocol_once, network is {network}, protocol is {protocol},seed is {seed}")
+        # Reseed all rng
+        ns.set_random_state(seed)
+        self.rng_noise.seed(seed)
+        self.rng_measure.seed(seed)
+        self.rng_loss.seed(seed)
+        # XXX refactor this
+        rng_measure_mem.seed(seed)
+        # Run the noiseless protocol after reseeding the rng
+        protocol.start()
+        # stats = ns.sim_run(12000)
+        stats = ns.sim_run()
+        # print(stats.summary())
+        elasped_time = stats.data["elapsed_wall_time"]
+        protocol.stop()
+        # protocol.reset()
+        # ns.sim_reset()
+        repeater_chain_success, data, logical_prob = self.collect_statistic(network, num_repeater, seed)
+        return repeater_chain_success, data, logical_prob, elasped_time
+
+    def cal_estimated_running_time(self, elasped_time_dict_per_run):
+        """To estimate the total running time required
+        """
+        total_estimated_runtime = 0
+        required_successful_cnt = 100  # per number of repeater
+        for num_repeater in num_repeater_ls:
+            prob_repeater_chain = cal_exact_prob_2level_tree(
+                tree_vec=[b0, b1], total_distance=distance_ls[0], num_repeater=num_repeater, m=num_rgs_branches_half, attenuation_length=22)
+
+            time_noise = elasped_time_dict_per_run[f'{num_repeater}_noise']
+            # time_noiseless=elasped_time_dict_per_run[f'{num_repeater}_noiseless']
+            # estimated_runtime+=time_noise*required_successful_cnt/prob_repeater_chain+time_noiseless*required_successful_cnt
+            estimated_runtime = time_noise*required_successful_cnt/prob_repeater_chain+time_noise*required_successful_cnt
+            total_estimated_runtime += estimated_runtime
+            print(f'For {num_repeater} repeaters, prob_repeater_chain={prob_repeater_chain},estimated runtime: {estimated_runtime} second or {estimated_runtime/3600} hour')
+        print(f'total time:{total_estimated_runtime/3600} hour')
+
+
+if __name__ == "__main__":
+    import sys
+    config_file = Constants.DEFAULT_PARAM_FILE
+    if len(sys.argv) > 1:
+        config_file = sys.argv[1]
+    sim = APESimulation(num_repeaters=[1, 2, 3, 4],
+                        distances=[10, 20, 30, 40],
+                        iterations=1,
+                        parameter_file=config_file)
+    sim.start()
+    sim.finalize()
