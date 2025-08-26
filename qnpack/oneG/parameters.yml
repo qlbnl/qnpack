@@ -1,0 +1,58 @@
+sim:
+  iterations: 10
+  debug: false
+
+clock:
+  HZ: 1000000  # 1 MHz
+  max_ticks: -1
+
+bsm:
+  detection_window: 4320000.0  # ns  # find optimal value
+  max_emission_retries: 30
+  detector_wait_factor: 1.05
+  system_delay: 0
+  timeout: 40
+  coupling_efficiency: 1 #0.75
+
+ion_trap:
+  noise_model: 0  # 0 for noiseless, 1 for noisy
+  initial_velocity: 1.0 
+  ion_mass: 0.0000000000000000000000000664 #6.64e-26 
+  decay_rate: 11490000 #6e6
+  rabi_frequency: 22000000 #1e7 
+  laser_wavelength: 0.000000400 #400e-9
+  resonant_frequency: 10000000 #1e7
+  oscillation_frequency: 1000000 #1e6
+  initial_mean_excitation_number: 1
+  lamb_dicke_parameter: 0.1
+  doppler_sim_time: 4000  #1000 micro s
+  sideband_sim_time: 3000 #micro s
+  init_sim_time: 30 #micro s
+  pump_sim_time: 20 #micro s
+  raman_ex_sim_time: 150 #micro s
+  spin_echo_sim_time: 12 #micro s
+  
+  z_gate_duration: 5000 #ns
+  x_gate_duration: 5000 #ns
+  ms_pi_over_2_duration: 119000 #ns
+  measurement_duration: 5000 #ns
+  emission_duration: 7220000 #ns
+  retry_duration: 75000 #ns
+
+  collection_efficiency: 1 #0.52 # affects rate
+  emission_fidelity: 1 #affects fidelity
+  coherence_time: 0 # ns affects fidelity
+  init_depolar_prob: 0
+  ms_depolar_prob: 0.0 #affects fidelity
+  z_depolar_prob: 0.000 #affects fidelity, probability that qubit will depolarize after gate 
+  x_depolar_prob: 0.000 #affects fidelity
+  gs_prob: 1
+
+network:
+  c_lightspeed: 200000
+  q_lightspeed: 200000  # Fixed speed of photons through the channel [km/s]
+  photon_loss: 0.0 # affects rate
+  init_photon_loss: 0.0 #0.45 # due to QFC # affects rate
+  node_c_pos: 0
+  channel_depolar_rate: 0.0 #affects fidelity # probability that the qchannel will depolarize
+  proto_sched: 1 #1 is best, 2 is good, 3 is worst

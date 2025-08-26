@@ -69,7 +69,7 @@ class myEmitterT1T2NoiseModel(T1T2NoiseModel):
     def _random_pauli_noise(self, qubit, probI, probX, probY, probZ):
         # For now, just apply standard noise.
         # ns.qubits.qubitapi.apply_pauli_noise(qubit, (probI, probX, probY, probZ))
-        # print(f'{ns.sim_time():.1f}:inside _random_pauli_noise",{qubit},{probI}, {probX}, {probY}, {probZ}')
+        #print(f'{ns.sim_time():.1f}:inside _random_pauli_noise",{qubit},{probI}, {probX}, {probY}, {probZ}')
         my_apply_pauli_noise(qubit, (probI, probX, probY, probZ), my_rng=self.my_rng)
 
 

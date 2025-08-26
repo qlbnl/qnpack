@@ -12,7 +12,7 @@ def run_simulation(sim_type, output_dir, parameter_file, theo_mode):
                 fixed_params={},
                 varying_params={
                     "num_repeaters": [1, 3, 5],
-                    "distances": [5, 10, 15]
+                    "distance": [5, 10, 15]
                 },
                 parameter_file=parameter_file,
                 output_dir=output_dir,
@@ -30,8 +30,11 @@ def run_simulation(sim_type, output_dir, parameter_file, theo_mode):
             )
     elif sim_type == "APE":
         sim = APESimulation(
-            num_repeaters=[1, 3, 5],
-            distances=[10],
+            fixed_params={},
+            varying_params={
+                "num_repeaters": [1, 3, 5],
+                "distance": [10]
+            },
             iterations=1,
             min_successful=10,
             parameter_file=parameter_file,
@@ -69,17 +72,8 @@ def main():
 
     args = parser.parse_args()
 
-    # Resolve param_file relative to demo folder
-    base_dir = os.path.dirname(__file__)
-    param_file = args.param or (
-        "parameters/theo_rate.yml" if args.type == "1G" and args.theo else
-        ("parameters/noisy.yml" if args.noisy else "parameters/noiseless.yml") if args.type == "1G" else
-        "parameters/scenario1.yml"
-    )
-    param_file = os.path.join(base_dir, param_file)
-
-    # Output directory relative to demo folder
-    output_dir = os.path.join(base_dir, args.output)
+    param_file = args.param
+    output_dir = args.output
     os.makedirs(output_dir, exist_ok=True)
 
     run_simulation(args.type, output_dir, param_file, args.theo)

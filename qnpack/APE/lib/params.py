@@ -10,8 +10,12 @@ class APEParams:
             (cfg.rgs.b1 + 1) + cfg.emitter.H_duration + cfg.emitter.MEASURE_duration
 
     @staticmethod
-    def core_photon_delay(cfg):
+    def core_photon_delay(cfg): #in ns
         return APEParams.level1_subtree_duration(cfg) * cfg.rgs.b0 + 10
+    
+    @staticmethod
+    def core_photon_delay_fibre_length(cfg): #in km
+        return APEParams.core_photon_delay(cfg) * 2E5 * 1E-9
 
     @staticmethod
     def apeqr_clock_period(cfg):
