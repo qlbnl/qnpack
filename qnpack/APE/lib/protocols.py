@@ -34,14 +34,13 @@ class ControlProtocol(NodeProtocol):
         log.debug('control protocol is run')
         yield from self.recv_ctrl_msg()
         log.debug("In control protocol, msg are received from all BSM nodes:", self.meas_results)
-        # verify=verification(num_repeater,self.cfg.rgs.num_branches_half,data_noise["CRP_result"])
-        verify = verification(self.num_repeater, self.cfg.rgs.num_branches_half, self.meas_results)
-        verify.start()
-        qrepr_veri = verify.get_expected_Bell_pair()
-        log.debug("qrepr_veri inside control protocol", qrepr_veri)
-        self.send_ctrl_msg(nname="a", msg=qrepr_veri)
-        self.send_ctrl_msg(nname="b", msg=qrepr_veri)
-        log.debug("Complete sending ctrl msg")
+        #verify = verification(self.num_repeater, self.cfg.rgs.num_branches_half, self.meas_results)
+        #verify.start()
+        #qrepr_veri = verify.get_expected_Bell_pair()
+        #log.debug("qrepr_veri inside control protocol", qrepr_veri)
+        #self.send_ctrl_msg(nname="a", msg=qrepr_veri)
+        #self.send_ctrl_msg(nname="b", msg=qrepr_veri)
+        #log.debug("Complete sending ctrl msg")
 
     def send_ctrl_msg(self, nname, msg=""):
         self.node.ports[f"cport_to_{nname}"].tx_output(msg)
@@ -89,15 +88,16 @@ class EndNodeEmissionProtocol(NodeProtocol):
         self.node.qmemory.properties["emitted_photon_cnt"] = 0
         self.matter_qubit_index = 0
         clock = self.node.subcomponents["clock"]
+        #clock.properties["start_delay"]=1
         clock.start()
         qproc = self.node.qmemory
         for i in range(len(self.neighbor_node_dir_to)):
             # Waiting for clock signal at fixed time interval
             yield self.await_port_output(clock.ports["cout"])
             if self.end_dir == self.neighbor_node_dir_to[i]:
-                # print(f"{ns.sim_time():.1f} Receive clock signal in end node {self.node.name}. Delay to emit photon at the same time as each leaf photon clock is emitted in ape node")
+                #print(f"{ns.sim_time():.1f} Receive clock signal in end node {self.node.name}. Delay to emit photon at the same time as each leaf photon clock is emitted in ape node")
                 yield self.await_timer(duration=self.leaf_photon_clock_time)
-                # print(f"{ns.sim_time():.1f} After delay, ready to initialize in end node {self.node.name}.")
+                #print(f"{ns.sim_time():.1f} After delay, ready to initialize in end node {self.node.name}.")
 
                 # Initialize matter qubit
                 qproc.execute_program(EndNodeEmitterInitProgram(), qubit_mapping=[self.matter_qubit_index])
@@ -106,13 +106,13 @@ class EndNodeEmissionProtocol(NodeProtocol):
 
                 # Send clock message
                 self.node.ports[f"cport_clock_to_{self.send_dir}"].tx_output("trigger_BSM")
-                # print(f"{ns.sim_time():.1f}: End node {self.node.name} sends BSM clock message to {self.send_dir} measurement node")
+                #print(f"{ns.sim_time():.1f}: End node {self.node.name} sends BSM clock message to {self.send_dir} measurement node")
 
                 # Emission of one photon from emitter, output at "qout{i}" of quantum processor
-                # print(f"{ns.sim_time():.1f}: Emitter {qproc.peek(self.matter_qubit_index)} at {self.node.name} is going to emit photon")
+                #print(f"{ns.sim_time():.1f}: Emitter {qproc.peek(self.matter_qubit_index)} at {self.node.name} is going to emit photon")
                 qproc.execute_instruction(INSTR_EMIT_PHOTON, [self.matter_qubit_index])
                 yield self.await_program(qproc)
-                # print(f"{ns.sim_time():.1f}: one photon is emitted from emitter at {self.node.name}")
+                #print(f"{ns.sim_time():.1f}: one photon is emitted from emitter at {self.node.name}")
                 qproc.execute_instruction(instr.INSTR_H, [self.matter_qubit_index])
                 yield self.await_program(qproc)
                 self.matter_qubit_index += 1
@@ -168,8 +168,10 @@ class GraphStateEmissionProtocol(NodeProtocol):
 
         for i in range(len(self.dir_seq)):  # len(self.dir_seq)=number of branches in RGS
             dir = self.dir_seq[i]
+            #print(f"{ns.sim_time():.1f}:branch{i},to direction {dir}")
             # Waiting for clock signal at fixed time interval
             yield self.await_port_output(clock.ports["cout"])
+            #print(f"{ns.sim_time():.1f}:branch{i},to direction {dir}, after waiting clock signal")
             branch_size = 1+self.b0+self.b0*self.b1
             # print(f"{ns.sim_time():.1f}: (Photons {i*branch_size+1} to {(i+1)*branch_size} of RGS) Start GS gen process at {self.node.name}")
             for k in range(self.b0):
@@ -180,7 +182,6 @@ class GraphStateEmissionProtocol(NodeProtocol):
                     # Start initialization of emitter and ancilla_1
                     qproc.execute_program(EmitterAncillaInitProgram(), qubit_mapping=[0, 1])
                     yield self.await_program(qproc)
-                    # print(f'{ns.sim_time():.1f}:initialization of emitter in {self.node.name}')
                 else:
                     qproc.execute_program(EmitterInitProgram(), qubit_mapping=[0, 1])
                     yield self.await_program(qproc)
@@ -207,12 +208,15 @@ class GraphStateEmissionProtocol(NodeProtocol):
                     #        #print(f"{ns.sim_time():.1f}: Emitter {qproc.peek(0)} at {self.node.name} is going to emit photon")
 
                     # Emission of one core photon from emitter, output at "qout0" of quantum processor
-                    # print(f"{ns.sim_time():.1f}: Emitter {qproc.peek(0)} at {self.node.name} is going to emit photon")
+                    #print(f"{ns.sim_time():.1f}: Emitter {qproc.peek(0)} at {self.node.name} is going to emit photon")
                     qproc.execute_instruction(INSTR_EMIT_PHOTON, [0])
 
                     # Waiting for completed emission of core photon
                     yield self.await_program(qproc)
-                    # print(f"{ns.sim_time():.1f}: one level-2 core photon is emitted from emitter at {self.node.name}")
+                    #if j == self.b1:
+                    #    print(f"{ns.sim_time():.1f}: one level-1 core photon is emitted from emitter at {self.node.name}")
+                    #else:
+                    #    print(f"{ns.sim_time():.1f}: one level-2 core photon is emitted from emitter at {self.node.name}")
 
                     # Add buffer time between each core photon emission
                     yield self.await_timer(duration=self.cfg.emitter.photon_emission_buffer)
@@ -234,17 +238,17 @@ class GraphStateEmissionProtocol(NodeProtocol):
 
             # Send clock message to measurement node to trigger BSM detector
             self.node.ports[f"cport_clock_to_{dir}"].tx_output("trigger_BSM")
-            # print(f"{ns.sim_time():.1f}: {self.node.name} sends BSM clock message to {dir} measurement node")
+            #print(f"{ns.sim_time():.1f}: {self.node.name} sends BSM clock message to {dir} measurement node")
 
             # Trigger optical switch for leaf photon
             switch.topology = {'switch_in': f'switch_out_{dir}_leaf'}
             # print(f'{ns.sim_time():.1f}:Trigger optical switch port switch_in to switch_out_{dir}_leaf in {self.node.name}')
 
             # Emission of one leaf photon from emitter, output at "qout0" of quantum processor
-            # print(f"{ns.sim_time():.1f}: Emitter {qproc.peek(0)} at {self.node.name} is going to emit photon")
+            #print(f"{ns.sim_time():.1f}: Emitter {qproc.peek(0)} at {self.node.name} is going to emit photon")
             qproc.execute_instruction(INSTR_EMIT_PHOTON, [0])
             yield self.await_program(qproc)
-            # print(f"{ns.sim_time():.1f}: one leaf photon is emitted from emitter at {self.node.name}")
+            #print(f"{ns.sim_time():.1f}: one leaf photon is emitted from emitter at {self.node.name}")
 
             if i == 0:
                 qproc.execute_program(EndNodeEmitterInitProgram(), qubit_mapping=[2])

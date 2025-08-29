@@ -28,7 +28,7 @@ emitter_MEASURE_duration = 20  # 10
 
 #collection_eff=0.997
 #QFC_loss=0.05
-p_loss_length=0.2
+#p_loss_length=0.2
 #detector_eff=1
 c=2E5/1E9 #km/ns
 
@@ -80,17 +80,17 @@ def cal_exact_prob_tree(tree_vec=[2,3],total_distance=1000,num_repeater=1,m=3,at
     prob_repeater_chain=(prob_repeater_end_node**2)*prob_two_repeaters**(num_repeater-1)
     return prob_repeater_chain
 
-def total_prob_survival(length,QFC_loss,detector_eff,collection_eff):
+def total_prob_survival(length,p_loss_length,QFC_loss,detector_eff,collection_eff):
     fiber_prob_loss = 1 - (1 - QFC_loss) * np.power(10, - length * p_loss_length / 10)
     return collection_eff*(1-fiber_prob_loss)*detector_eff
 
-def cal_exact_prob_2level_tree(tree_vec,m,total_distance,num_repeater,QFC_loss,detector_eff,collection_eff):
+def cal_exact_prob_2level_tree(tree_vec,m,total_distance,num_repeater,p_loss_length,QFC_loss,detector_eff,collection_eff):
     #How to exclude tie case here?
     #print("inside cal_exact_prob_2level_tree",QFC_loss,detector_eff,collection_eff)
     tree_depth=3
     qchannel_length=total_distance/(2*(num_repeater+1))
     #prob_ph=np.exp(-qchannel_length/attenuation_length) #Survival prob
-    prob_ph=total_prob_survival(qchannel_length,QFC_loss,detector_eff,collection_eff)
+    prob_ph=total_prob_survival(qchannel_length,p_loss_length,QFC_loss,detector_eff,collection_eff)
     #print("prob_ph",prob_ph)
     prob_loss_qchannel=1-prob_ph
     prob_bsm=(1-prob_loss_qchannel)**2/2
@@ -236,10 +236,10 @@ def cal_repeater_rate(prob_repeater_chain,m,b0,b1,num_repeater,total_distance):
     new_repeater_rate=prob_repeater_chain*floor((1E9-T_transmission)/T_rgs)
     new_repeater_rate_min=prob_repeater_chain*floor((1E9-T_transmission_max)/T_rgs)
     #print("ceil(L0/c/T_rgs)",ceil(L0/c/T_rgs),"ceil(total_distance/c/T_rgs)",ceil(total_distance/c/T_rgs))
-    print("T_rgs",T_rgs,"T_transmission",T_transmission,"T_transmission_max",T_transmission_max)
+    #print("T_rgs",T_rgs,"T_transmission",T_transmission,"T_transmission_max",T_transmission_max)
     #print("qubits_per_end",qubits_per_end)
     #print("prob_repeater_chain",prob_repeater_chain)
-    print("repeater_rate",repeater_rate/matter_qubit, "new_repeater_rate", new_repeater_rate/matter_qubit,"new_repeater_rate_min", new_repeater_rate_min/matter_qubit)
+    #print("repeater_rate",repeater_rate/matter_qubit, "new_repeater_rate", new_repeater_rate/matter_qubit,"new_repeater_rate_min", new_repeater_rate_min/matter_qubit)
     return repeater_rate, matter_qubit
 
 def cal_theoretical_repeater_rate(m,b0,b1,num_repeater,total_distance,QFC_loss,detector_eff,collection_eff):
@@ -351,7 +351,7 @@ def plot_max_rate_against_n(is_per_matter_qubit,QFC_loss,detector_eff,collection
     plt.savefig('qnpack/APE/plot_Sigcomm/sigcomm_figures/optimized_rgs.pdf', dpi=1200) 
     plt.show()
 
-def cal_rate_from_data(data,m,b0,b1,QFC_loss,detector_eff,collection_eff,is_per_memory_qubit):
+def cal_rate_from_data(data,m,b0,b1,p_loss_length,QFC_loss,detector_eff,collection_eff,is_per_memory_qubit):
     for dist, item in data.items():
         total_distance=float(dist)
         keys = list(item.keys())
@@ -368,7 +368,7 @@ def cal_rate_from_data(data,m,b0,b1,QFC_loss,detector_eff,collection_eff,is_per_
             #print(dist,int(keys[i]))
             sim_prob=successful_cnt/cnt
             exact_prob=cal_exact_prob_2level_tree(tree_vec=[b0,b1],total_distance=total_distance,num_repeater=num_repeater,
-                                            m=m,QFC_loss=QFC_loss,detector_eff=detector_eff,collection_eff=collection_eff)
+                                            m=m,p_loss_length=p_loss_length,QFC_loss=QFC_loss,detector_eff=detector_eff,collection_eff=collection_eff)
             sim_rate,matter_qubit=cal_repeater_rate(sim_prob,m,b0,b1,num_repeater=num_repeater,total_distance=total_distance)
             if is_per_memory_qubit:
                 sim_rate=sim_rate/matter_qubit
@@ -383,6 +383,18 @@ def cal_rate_from_data(data,m,b0,b1,QFC_loss,detector_eff,collection_eff,is_per_
         print(dist,"exact_prob_list",exact_prob_list)
     return keys,sim_rate_list,exact_rate_list
     #return keys,sim_prob_list,exact_prob_list
+
+def cal_rate_from_single_data(sim_prob,total_distance,num_repeater,m,b0,b1,p_loss_length,QFC_loss,detector_eff,collection_eff,is_per_memory_qubit):       
+            
+    exact_prob=cal_exact_prob_2level_tree(tree_vec=[b0,b1],total_distance=total_distance,num_repeater=num_repeater,
+                                    m=m,p_loss_length=p_loss_length, QFC_loss=QFC_loss,detector_eff=detector_eff,collection_eff=collection_eff)
+    sim_rate,matter_qubit=cal_repeater_rate(sim_prob,m,b0,b1,num_repeater=num_repeater,total_distance=total_distance)
+    if is_per_memory_qubit:
+        sim_rate=sim_rate/matter_qubit
+    exact_rate,_=cal_repeater_rate(exact_prob,m,b0,b1,num_repeater=num_repeater,total_distance=total_distance)
+    if is_per_memory_qubit:
+        exact_rate=exact_rate/matter_qubit        
+    return sim_rate,exact_rate
 
 def cal_sem(avg_fidelity,total_count):
     n1=avg_fidelity*total_count

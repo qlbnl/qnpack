@@ -6,6 +6,7 @@ import logging
 import tracemalloc
 import argparse
 import itertools
+import pandas
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
 import matplotlib.colors as mcolors
@@ -52,7 +53,8 @@ from qnpack.APE.lib.drawGS import (
 )
 
 from qnpack.APE.lib.repeater_rate import (
-    cal_exact_prob_2level_tree
+    cal_exact_prob_2level_tree,
+    cal_rate_from_single_data
 )
 from qnpack.APE.lib.verification import verification
 
@@ -66,7 +68,7 @@ log = logging.getLogger(__name__)
 class APESimulation(Simulation):
     def __init__(self, iterations=None, min_successful=None, logfile=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
+        print("self.cfg.network.photon_loss",self.cfg.network.photon_loss)
         self.iterations = iterations or self.cfg.sim.iterations
         self.min_successful=min_successful or self.cfg.sim.min_successful
         #joint_distance = '_'.join(str(dist) for dist in self.distances)
@@ -88,16 +90,16 @@ class APESimulation(Simulation):
         self.rng_loss = np.random.RandomState(0)
         self.rng_measure = np.random.RandomState(0)
 
-
+    
     def start(self):
         # starting memory tracing
         tracemalloc.start()
 
         ns.set_random_state()
-
-        total_fidelity_dict = {}
-        total_prob_dict = {}
-        total_elasped_time_dict = {}
+        self.final_data = []
+        self.total_fidelity_dict = {}
+        self.total_prob_dict = {}
+        self.total_elasped_time_dict = {}
         self.total_elasped_time_dict_per_run={}
 
         log.info(f"Running simulation with parameters: {self.varying_params}")
@@ -112,7 +114,7 @@ class APESimulation(Simulation):
             sweep_params = dict(zip(param_names, combo))
             sim_params   = {**self.fixed_params, **sweep_params}
 
-            # Standardize: we expect "distance" and "num_repeaters" in varying_params
+            # Hard-code: we expect "distance" and "num_repeaters" in varying_params
             distance_val = sim_params["distance"]       # one numeric distance per combo
             num_repeater_val  = sim_params["num_repeaters"]   # may be int or list for inner loop
             #num_repeater_ls = num_rep_val if isinstance(num_rep_val, (list, tuple, range)) else [num_rep_val]
@@ -129,15 +131,60 @@ class APESimulation(Simulation):
             
             # aggregate by distance then repeater
             dist_key = f"{distance_val}"
-            total_fidelity_dict.setdefault(dist_key, {}).update(fidelity_dict)
-            total_prob_dict.setdefault(dist_key, {}).update(prob_dict)
-            total_elasped_time_dict.setdefault(dist_key, {}).update(elasped_time_dict)
+            self.total_fidelity_dict.setdefault(dist_key, {}).update(fidelity_dict)
+            self.total_prob_dict.setdefault(dist_key, {}).update(prob_dict)
+            self.total_elasped_time_dict.setdefault(dist_key, {}).update(elasped_time_dict)
             self.total_elasped_time_dict_per_run.setdefault(dist_key, {}).update(elasped_time_dict_per_run)
-            #total_fidelity_dict[f"{distance_val}"] = fidelity_dict
-            #total_prob_dict[f"{distance_val}"] = prob_dict
-            #total_elasped_time_dict[f"{distance_val}"] = elasped_time_dict
+        return self.final_data 
             
-        
+    def plot(self, final_data, show_theo_rate, x_axis1, y_axis1, xlabel1, ylabel1, label_param1, 
+              x_axis2, y_axis2, xlabel2, ylabel2, label_param2,
+              title1="Simulation Results",
+              title2="Simulation Results",
+              filename="simulation_results.png"):
+        # Save results
+        data = pandas.DataFrame(final_data)
+        data.to_csv(f"{self.output_dir}/simulation_results.csv", sep=',')
+
+        ffig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+        # Loop over the values of the selected label parameter
+        for value in self.varying_params[label_param1]:
+            subset = data[data[label_param1] == value]
+            if x_axis1 != "init_photon_loss":
+                ax1.errorbar(subset[x_axis1], subset[y_axis1], label=f"{label_param1}={value}")
+                if y_axis1=='sim_rate' and show_theo_rate:
+                    ax1.errorbar(subset[x_axis1], subset['theo_rate'], linestyle='dashdot', label=f"{label_param1}={value} theo. value")
+
+            else:
+                ax1.errorbar((1-subset[x_axis1]), subset[y_axis1], label=f"{label_param1}={value}")
+    
+        ax1.set_xlabel(xlabel1)  # Format axis labels
+        ax1.set_ylabel(ylabel1)
+        ax1.set_title(title1)
+        ax1.legend(title=label_param1.replace("_", " ").title())
+        ax1.set_xticks(sorted(data[x_axis1].unique()))
+
+        # Loop over the values of the selected label parameter
+        for value in self.varying_params[label_param2]:
+            subset = data[data[label_param2] == value]
+            if x_axis2 != "init_photon_loss":
+                ax2.errorbar(subset[x_axis2], subset[y_axis2], label=f"{label_param2}={value}")
+            else:
+                ax2.errorbar((1-subset[x_axis2]), subset[y_axis2], label=f"{label_param2}={value}")
+    
+        ax2.set_xlabel(xlabel2)  # Format axis labels
+        ax2.set_ylabel(ylabel2)
+        ax2.set_title(title2)
+        ax2.legend(title=label_param2.replace("_", " ").title())
+        ax2.set_xticks(sorted(data[x_axis2].unique()))
+
+        # Save the figures
+        plt.tight_layout()
+        plt.savefig(f"{self.output_dir}/{filename}")
+        plt.show()
+
+    #def plot2(self):
         ##Save output files
         #outfile = self.mypath+"fidelity.dat"
         #outfile2= self.mypath+"prob.dat"
@@ -776,14 +823,14 @@ class APESimulation(Simulation):
         protocol_noise = setup_repeater_protocol(self.cfg,network_noise, bsm_nodes_noise,
                                                  ape_nodes_noise, end_ape_nodes_noise,
                                                  rgs_size, num_repeater,is_manual_noise=False)
-        network, bsm_nodes, ape_nodes, end_ape_nodes = self.network_setup(
-            total_num_repeater=total_num_repeater, total_distance=total_distance, num_repeater=num_repeater,
-            num_rgs_branches_half=num_rgs_branches_half, apply_fibre_loss=False,
-            discard=False, hide_fixed_photons=True, apply_emitter_noise=False,
-            apply_memory_noise=False, rng_noise=self.rng_noise, rng_measure=self.rng_measure,
-            rng_loss=self.rng_loss, is_forced_outcome=True, is_forced_outcome_history=True, is_one_end_noise=is_one_end_noise)
-        protocol = setup_repeater_protocol(self.cfg, network, bsm_nodes, ape_nodes, end_ape_nodes,
-                                           rgs_size, num_repeater,is_manual_noise=False)
+        #network, bsm_nodes, ape_nodes, end_ape_nodes = self.network_setup(
+        #    total_num_repeater=total_num_repeater, total_distance=total_distance, num_repeater=num_repeater,
+        #    num_rgs_branches_half=num_rgs_branches_half, apply_fibre_loss=False,
+        #    discard=False, hide_fixed_photons=True, apply_emitter_noise=False,
+        #    apply_memory_noise=False, rng_noise=self.rng_noise, rng_measure=self.rng_measure,
+        #    rng_loss=self.rng_loss, is_forced_outcome=True, is_forced_outcome_history=True, is_one_end_noise=is_one_end_noise)
+        #protocol = setup_repeater_protocol(self.cfg, network, bsm_nodes, ape_nodes, end_ape_nodes,
+        #                                   rgs_size, num_repeater,is_manual_noise=False)
         
         
         # print("protocol",protocol,"protocol_noise:",protocol_noise)
@@ -802,22 +849,22 @@ class APESimulation(Simulation):
                 protocol_noise = setup_repeater_protocol(self.cfg,self.cfg_we,network_noise, bsm_nodes_noise,
                                                  ape_nodes_noise, end_ape_nodes_noise,
                                                  rgs_size, num_repeater,is_manual_noise=False)
-                network, bsm_nodes, ape_nodes, end_ape_nodes = self.network_setup(
-                    total_num_repeater=total_num_repeater, total_distance=total_distance, num_repeater=num_repeater,
-                    num_rgs_branches_half=num_rgs_branches_half, apply_fibre_loss=False,
-                    discard=False, hide_fixed_photons=True, apply_emitter_noise=False,
-                    apply_memory_noise=False, rng_noise=self.rng_noise, rng_measure=self.rng_measure,
-                    rng_loss=self.rng_loss, is_forced_outcome=True, is_forced_outcome_history=True, is_one_end_noise=is_one_end_noise)
-                protocol = setup_repeater_protocol(self.cfg, self.cfg_we, network, bsm_nodes, ape_nodes, end_ape_nodes,
-                                           rgs_size, num_repeater,is_manual_noise=False)
-            m_collector.reset()  # Reset m_collector which is used to force measurement outcomes of noise case to noiseless case
-            MyFibreLossModel.lost_photon_ls = []  # Reset the list to store the lost photons during the noise case
+                #network, bsm_nodes, ape_nodes, end_ape_nodes = self.network_setup(
+                #    total_num_repeater=total_num_repeater, total_distance=total_distance, num_repeater=num_repeater,
+                #    num_rgs_branches_half=num_rgs_branches_half, apply_fibre_loss=False,
+                #    discard=False, hide_fixed_photons=True, apply_emitter_noise=False,
+                #    apply_memory_noise=False, rng_noise=self.rng_noise, rng_measure=self.rng_measure,
+                #    rng_loss=self.rng_loss, is_forced_outcome=True, is_forced_outcome_history=True, is_one_end_noise=is_one_end_noise)
+                #protocol = setup_repeater_protocol(self.cfg, self.cfg_we, network, bsm_nodes, ape_nodes, end_ape_nodes,
+                #                           rgs_size, num_repeater,is_manual_noise=False)
+            #m_collector.reset()  # Reset m_collector which is used to force measurement outcomes of noise case to noiseless case
+            #MyFibreLossModel.lost_photon_ls = []  # Reset the list to store the lost photons during the noise case
             repeater_chain_success_noise, data_noise, logical_prob_noise, elapsed_time_noise = self.run_protocol_once(
                 network_noise, protocol_noise, seed, num_repeater)
             elasped_time_dict[num_repeater] += elapsed_time_noise
             elasped_time_dict_per_run[f'{num_repeater}_noise'] = elapsed_time_noise
             log.debug("elasped_time_dict_per_run",elasped_time_dict_per_run)
-            log.debug(f"Lost photons: {MyFibreLossModel.lost_photon_ls}")
+            #log.debug(f"Lost photons: {MyFibreLossModel.lost_photon_ls}")
             # with open(debug_f, 'a') as f:
             # debug.write(f'Seed:{seed},With noise:{repeater_chain_success_noise},{data_noise["qrepr"]},{data_noise["CRP_result"]},{data_noise["GSEP_result"]}')
             #    f.write(f'{ns.sim_time()} \n')
@@ -870,12 +917,7 @@ class APESimulation(Simulation):
                             mismatch_dict[str(seed)] = fidelity
                     except TypeError as e:
                         print("TypeError when calculating fidelity")
-                        #with open(error_f, 'a') as f:
-                        #    f.write(
-                        #        f'Seed:{seed},Noise:{repeater_chain_success_noise},{data_noise["qrepr"]},{data_noise["CRP_result"]} \n')
-                        #    f.write(
-                        #        f'Seed:{seed},Noiseless:{repeater_chain_success_noiseless},{data_noiseless["qrepr"]},{data_noiseless["CRP_result"]} \n')
-                        #    f.write(f'{MyFibreLossModel.lost_photon_ls} \n')
+                    
                 else:
                     successful_cnt += 1
                     # if m_collector.is_meas_mismatch:
@@ -883,24 +925,29 @@ class APESimulation(Simulation):
                     #    mismatch_dict[str(seed)]=fidelity
             seed += 1
             cnt += 1
-            if cnt % 100 == 0:
-                # with open(debug_f, 'a') as f:
-                #     f.write(f"cnt:{cnt},successful_cnt:{successful_cnt},meas_mismatch_cnt:{meas_mismatch_cnt} \n")
-                #     f.write(f"fidelity: {np.average(fidelity_ls)} \n")
+            if cnt % 10 == 0:
                 log.info(f"\t\tcnt:{cnt},successful_cnt:{successful_cnt},meas_mismatch_cnt:{meas_mismatch_cnt}")
-                log.info(f"\t\tfidelity: {np.average(fidelity_ls)}")
+                mean_fidelity=np.average(fidelity_ls)
+                log.info(f"\t\tfidelity: {mean_fidelity}")
 
-            # fidelity_dict[num_repeater] = (np.average(fidelity_ls),successful_cnt/cnt)
-            if not only_noise and successful_cnt > 0:
-                fidelity_dict[num_repeater] = np.average(fidelity_ls)
-                log.info(f"\t\tfidelity_dict: {fidelity_dict}")
-
-            prob_dict[num_repeater] = (cnt, successful_cnt)
-            # with open(debug_f, 'a') as f:
-            #     f.write(
-            #         f"cnt:{cnt},successful_cnt:{successful_cnt},successful_prob:{successful_cnt/cnt},meas_mismatch_cnt:{meas_mismatch_cnt} \n")
-            #     f.write(f"{fidelity_dict}")
-            log.info(f"\t\tcnt: {cnt}, successful_cnt: {successful_cnt}, successful_prob: {successful_cnt/cnt}, meas_mismatch_cnt: {meas_mismatch_cnt}")
+        if not only_noise and successful_cnt > 0:
+            mean_fidelity=np.average(fidelity_ls)
+            fidelity_dict[num_repeater] = mean_fidelity
+            #log.info(f"\t\tfidelity_dict: {fidelity_dict}")
+        prob_dict[num_repeater] = (cnt, successful_cnt)
+        #log.info(f"\t\tcnt: {cnt}, successful_cnt: {successful_cnt}, success_prob: {successful_cnt/cnt}, meas_mismatch_cnt: {meas_mismatch_cnt}")
+        sim_rate,theo_rate= cal_rate_from_single_data(sim_prob=successful_cnt/cnt,total_distance=total_distance,num_repeater=num_repeater,
+                                                      m=self.cfg.rgs.num_branches_half,b0=self.cfg.rgs.b0,b1=self.cfg.rgs.b1,
+                                                      p_loss_length=self.cfg.network.photon_loss,QFC_loss=self.cfg.emitter.QFC_loss,
+                                                      detector_eff=self.cfg.emitter.detector_eff,collection_eff=self.cfg.emitter.collection_eff,is_per_memory_qubit=True)
+        self.final_data.append({
+                'distance': total_distance,
+                'num_repeaters':num_repeater,
+                'success_prob': successful_cnt/cnt,
+                'sim_rate': sim_rate,
+                'theo_rate': theo_rate,
+                'fidelity': mean_fidelity
+                })
 
         # print("logical x prob",1-debug_noise[0]/debug_noise[1],"logical z prob",1-debug_noise[2]/debug_noise[3])
         return fidelity_dict, prob_dict, elasped_time_dict, elasped_time_dict_per_run
@@ -965,18 +1012,26 @@ if __name__ == "__main__":
     config_file = Constants.DEFAULT_PARAM_FILE
     #if len(sys.argv) > 1:
     #    config_file = sys.argv[1]
+
     fixed_params = {
-        "network": {"photon_loss": 0}
+        "network": {"photon_loss": 0.2},
+        "emitter":{"emitter_T2":0,"memory_T2":0,"QFC_loss":0} 
     }
     varying_params = {
-        "num_repeaters": [1,2],
-        "distance": [10, 20],
+        "num_repeaters": [1,2,3,4],
+        "distance": [10],
     }
-    sim = APESimulation(iterations=1,
-                        min_successful=1,
+    sim = APESimulation(iterations=10,
+                        min_successful=0,
                         fixed_params=fixed_params,
                         varying_params=varying_params,
                         parameter_file=config_file,
                         output_dir="results",)
-    sim.start()
-    sim.finalize()
+    data=sim.start()
+    print('final_data',data)
+    sim.plot(final_data=data, show_theo_rate=True, x_axis1="num_repeaters", y_axis1="sim_rate", xlabel1="Number of repeaters", ylabel1="Rate (Hz)",
+         label_param1="distance", title1="Rate vs Number of repeaters",
+         x_axis2="num_repeaters", y_axis2="fidelity", xlabel2="Number of repeaters", ylabel2="Fidelity",
+         label_param2="distance", title2="Fidelity vs Number of repeaters"
+         )
+    #sim.finalize()

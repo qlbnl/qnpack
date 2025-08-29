@@ -11,9 +11,9 @@ clock:
   max_ticks: -1
 
 rgs:
-  num_branches_half: 6
+  num_branches_half: 8
   b0: 6
-  b1: 3
+  b1: 4
 
 bsm:
   max_emission_retries: 90

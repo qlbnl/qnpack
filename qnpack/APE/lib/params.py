@@ -20,7 +20,7 @@ class APEParams:
     @staticmethod
     def apeqr_clock_period(cfg):
         return (APEParams.level1_subtree_duration(cfg) * (cfg.rgs.b0 + 1) + cfg.emitter.CZ_duration +
-                cfg.emitter.MEASURE_duration) * 1E-9
+                cfg.emitter.MEASURE_duration+1) * 1E-9
 
     @staticmethod
     def end_node_emitter_init_duration(cfg):
