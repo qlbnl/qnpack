@@ -10,8 +10,8 @@ log = logging.getLogger(__name__)
 class Simulation(ABC):
     def __init__(self,
                  parameter_file=None,
-                 fixed_params=None,
-                 varying_params=None,
+                 fixed_params=dict(),
+                 varying_params=dict(),
                  output_dir=None,
                  logfile=None,
                 iterations: int = 1):

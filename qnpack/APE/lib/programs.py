@@ -252,7 +252,10 @@ def get_apeqr_node_instructions(cfg, noise=False, rng_noise=None, rng_measure=No
         PhysicalInstruction(my_INSTR_MEASURE_X, duration=cfg.emitter.MEASURE_duration, parallel=False, topology=[1]),
         PhysicalInstruction(my_INSTR_MEASURE_Y, duration=cfg.emitter.MEASURE_duration, parallel=False, topology=[2]),
         PhysicalInstruction(INSTR_Rx, duration=cfg.emitter.H_duration, parallel=False, topology=[1]),
-        PhysicalInstruction(INSTR_Rx, duration=cfg.emitter.H_duration, parallel=False, topology=[2])
+        PhysicalInstruction(INSTR_Rx, duration=cfg.emitter.H_duration, parallel=False, topology=[2]),
+        #Manual Z error at emitter for debugging purpose
+        PhysicalInstruction(instr.INSTR_Z, duration=0, parallel=False,
+                            topology=[0], quantum_noise_model=emitter_noise_model)
     ]
     return phys_instructions
 

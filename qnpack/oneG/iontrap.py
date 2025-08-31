@@ -99,9 +99,15 @@ class IonTrapSimulation(Simulation):
         for param_values in itertools.product(*self.varying_params.values()):
             param_dict = dict(zip(param_names, param_values))
             log.info(f"Running simulation with parameters: {param_dict}")
+            
+            fixed_params_values = self.fixed_params.values()
+            fixed_params_unpacked = {}
+            for d in fixed_params_values:
+                for k, v in d.items():
+                    fixed_params_unpacked[k] = v
 
             # Merge varying parameters with fixed parameters
-            sim_params = {**self.fixed_params, **param_dict}
+            sim_params = {**fixed_params_unpacked, **param_dict}
 
             # Calculate node distances based on number of repeaters and total distance
             total_nodes = 3 + 2 * sim_params["num_repeaters"]
@@ -127,7 +133,6 @@ class IonTrapSimulation(Simulation):
                     return self.cfg.bsm.max_emission_retries
             
             # Separate keys for network_params and those needing self.cfg
-            # network_params = {key: network_params_init[key] for key in network_params_init if key in network_param_keys}
             network_params = {key: network_params_init[key] for key in network_params_init}
             
             # Parameters not in the list should be passed as self.cfg.<module>.<parameter>
@@ -146,7 +151,6 @@ class IonTrapSimulation(Simulation):
                     # Get the value from the correct module
                     if module_name:
                         network_params[key] = get_param_value(module_name, key)
-            # print(f"Final set of network params: {network_params}")
             
             # Now you can pass network_params to network_setup
             network, bsm_nodes, r_nodes, node_q1, node_q2, _ = self.network_setup(**network_params)
@@ -730,11 +734,11 @@ if __name__ == "__main__":
 
     varying_params = {
         "num_repeaters": [1, 3, 5],
-        "distances": [20, 50, 100],
+        "distance": [20, 50, 100],
     }
     sim = IonTrapSimulation(fixed_params=fixed_params,
                              varying_params=varying_params,
-                             parameter_file="../../tutorial/1G_examples/parameters/noisy.yml",
+                             parameter_file=config_file,
                              output_dir="results",
                              #logfile=""
                              )

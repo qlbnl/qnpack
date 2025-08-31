@@ -1,0 +1,52 @@
+sim:
+  iterations: 10
+  min_successful: 0
+  starting_seed: 500000 # 1E5 #2E5 ... #1E6 #1.1E6 ... #1.5E6
+  noiseless: false
+  is_one_end_noise: false
+  debug: false
+
+clock:
+  HZ: 1000000 # 1 MHz
+  max_ticks: -1
+
+rgs:
+  num_branches_half: 8
+  b0: 6
+  b1: 4
+
+bsm:
+  max_emission_retries: 90
+  detector_wait_factor: 1.05
+  system_delay: 0
+  timeout: 40
+  coupling_efficiency: 0.9 #0.75
+  detection_window: 3
+
+spd:
+  detection_window: 2
+
+emitter:
+  mem_measure: forced # [forced|random]
+  INIT_duration: 1
+  H_duration: 1 # 0.1?
+  EMIT_PHOTON_duration: 2
+  CZ_duration: 100
+  MEASURE_duration: 20
+  photon_emission_buffer: 1
+  collection_eff: 1
+  QFC_loss: 0.05
+  detector_eff: 1
+  emitter_T1: 0
+  emitter_T2: 3000 # 3000ns for Qdot from Quantum 5,397 (2021).
+  memory_T1: 0
+  memory_T2: 20.0e+06 # 20ms for nuclear spin Nat. Nanotechnol. 15, 999–1004 (2020)
+
+network:
+  c_lightspeed: 200000
+  q_lightspeed: 200000 # Fixed speed of photons through the channel [km/s]
+  photon_loss: 0.2 # affects rate
+  init_photon_loss: 0.7 #0.45 # due to QFC # affects rate
+  node_c_pos: 0
+  channel_depolar_rate: 0.1 #affects fidelity # probability that the qchannel will depolarize
+  proto_sched: 1 #1 is best, 2 is good, 3 is worst

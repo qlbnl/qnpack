@@ -135,7 +135,7 @@ def pick_entangled_qubits(qubit):
     num_qubits=check_matrix.shape[0]
     operators=np.bitwise_or(check_matrix[:,0:num_qubits],check_matrix[:,num_qubits:])
     #print("operators",operators)
-    #print("index",index)
+    #print("index inside pick_entangled_qubits",index, "qubit", qubit)
     entangled_qubits=np.array([index]) 
     mask = np.zeros(len(operators), dtype=bool) #True if the row has been checked
     
@@ -169,7 +169,9 @@ def pick_entangled_qubits(qubit):
     
     
     all_entangled_index=entangled_by_stab(operators,[index],entangled_qubits)
+    #print("all_entangled_index",all_entangled_index)
     all_entangled_index=np.sort(all_entangled_index)
+    #print("all_entangled_index after sorted",all_entangled_index)
     #print("np.sort(all_entangled_index)",all_entangled_index)
     #print("np.append(all_entangled_index,all_entangled_index+num_qubits)",np.append(all_entangled_index,all_entangled_index+num_qubits))
     

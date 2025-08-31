@@ -1,5 +1,6 @@
 import numpy as np
 import math
+import netsquid as ns
 from netsquid.qubits.operators import *
 from netsquid.qubits import operators as ops
 from netsquid.qubits import qubitapi as qapi
@@ -16,6 +17,7 @@ from qnpack.APE.lib.custom_qubitapi import (
     my_measure,
     my_gmeasure
 )
+from qnpack.APE.lib.drawGS import plot_qubit_graph, pick_entangled_qubits
 
 # Used in ancilla qubit for performing local complementation of graph state
 Rx = ops.create_rotation_op(np.pi/2, (1, 0, 0))
@@ -46,7 +48,7 @@ class measurement_outcomes_collector():
         self.spd_cnt_dict = {}
         self.bsm_cnt_dict = {}
         self.is_meas_mismatch = False
-
+        self.core_logical_result={}
 
 m_collector = measurement_outcomes_collector()
 
@@ -215,7 +217,7 @@ class MyFibreLossModel(FibreLossModel):
                 continue
             prob_loss = 1 - (1 - self.p_loss_init) * np.power(10, - kwargs['length'] * self.p_loss_length / 10)
             # prob_loss = 1 - np.exp(-kwargs['length'] / attenuation_length)
-            # print(f"Prob_loss {prob_loss} with length {kwargs['length']}")
+            #print(f"{qubit}:Prob_loss {prob_loss} with length {kwargs['length']}")
             self.my_lose_qubit(qubits, idx, prob_loss, rng=self.properties['rng'])
 
 
@@ -229,11 +231,13 @@ class SPGatedQuantumDetector(GatedQuantumDetector):
 
     def __init__(self, name, detection_window, num_input_ports=1, num_output_ports=1,
                  observable=ops.Z, meas_operators=None, system_delay=0., dead_time=0.,
-                 models=None, output_meta=None, error_on_fail=False, properties=None, rng_measure=None, phase_gate=False, is_forced_outcome=False):
+                 models=None, output_meta=None, error_on_fail=False, properties=None, rng_measure=None, 
+                 phase_gate=False, is_forced_outcome=False,is_forced_outcome_history=False):
         self.observable = observable
         self.rng_measure = rng_measure
         self.phase_gate = phase_gate
         self.is_forced_outcome = is_forced_outcome
+        self.is_forced_outcome_history=is_forced_outcome_history
         super().__init__(name, detection_window, num_input_ports, num_output_ports,
                          observable, meas_operators, system_delay, dead_time,
                          models, output_meta, error_on_fail, properties)
@@ -250,21 +254,26 @@ class SPGatedQuantumDetector(GatedQuantumDetector):
         #    print("Photons to be applied S gate:",q0)
 
         if self.is_forced_outcome:
-            # forced_outcome=m_collector.spd_list[m_collector.spd_cnt]
-            # m_collector.spd_cnt+=1
-            forced_outcome = self.get_forced_outcome()
-            # Do forced outcome here
-            m1, prob1 = my_measure(q0, self.observable, rng_measure=ForcedRNG(forced_outcome))
-            # print(f"{ns.sim_time():.1f}:inside SPD, {self.name},{q0},{m1},{prob1},forced_outcome:{forced_outcome}")
-            try:
-                assert m1 == forced_outcome, f"Forced outcome is different than actual outcome,{forced_outcome},{m_collector.spd_dict[self.name]},{m_collector.spd_cnt_dict[self.name]-1}"
-            # Code that runs if the assertion passes
-            except AssertionError as e:
-             # Code to handle the assertion error
-                # print(f"Assertion failed")
-                # print(f"Assertion failed: {e}")
-                m_collector.is_meas_mismatch = True
-        else:
+            if self.is_forced_outcome_history:
+                # forced_outcome=m_collector.spd_list[m_collector.spd_cnt]
+                # m_collector.spd_cnt+=1
+                forced_outcome = self.get_forced_outcome()
+                # Do forced outcome here
+                m1, prob1 = my_measure(q0, self.observable, rng_measure=ForcedRNG(forced_outcome))
+                # print(f"{ns.sim_time():.1f}:inside SPD, {self.name},{q0},{m1},{prob1},forced_outcome:{forced_outcome}")
+                try:
+                    assert m1 == forced_outcome, f"Forced outcome is different than actual outcome,{forced_outcome},{m_collector.spd_dict[self.name]},{m_collector.spd_cnt_dict[self.name]-1}"
+                # Code that runs if the assertion passes
+                except AssertionError as e:
+                 # Code to handle the assertion error
+                    # print(f"Assertion failed")
+                    # print(f"Assertion failed: {e}")
+                    m_collector.is_meas_mismatch = True
+            else: #Force all outcomes to be 0, which is equivalent to perfect local Pauli adjustment
+                m1, prob1 = my_measure(q0, self.observable, rng_measure=ForcedRNG(0))
+                # m_collector.spd_list.append(m1)
+                self.store_meas_outcome(m1)
+        else: #Random measurment outcomes
             m1, prob1 = my_measure(q0, self.observable, rng_measure=self.rng_measure)
             # m_collector.spd_list.append(m1)
             self.store_meas_outcome(m1)
@@ -286,25 +295,30 @@ class SPGatedQuantumDetector(GatedQuantumDetector):
         if self.name in m_collector.spd_cnt_dict:
             forced_outcome = m_collector.spd_dict[self.name][m_collector.spd_cnt_dict[self.name]]
             m_collector.spd_cnt_dict[self.name] += 1
-        else:
+        else: #for the first countof each spd
             forced_outcome = m_collector.spd_dict[self.name][0]
             m_collector.spd_cnt_dict[self.name] = 1
         return forced_outcome
-
-    def store_meas_outcome(self, m):
-        if self.name in m_collector.spd_dict:
-            m_collector.spd_dict[self.name].append(m)
+    
+    def get_protocol_name(self):
+        print("get_protocol_name",self.name)
+        if self.name[18:22]=='left' or self.name[25:29]=='left':
+            dir="L"
+        elif self.name[18:23]=='right' or self.name[25:30]=='right':
+            dir="R"
         else:
-            m_collector.spd_dict[self.name] = [m]
+            raise ValueError("spd name is neither left or right")
+        protocol_name=f"CRP{dir}_{self.supercomponent.name[5:]}"
+        return protocol_name
+    
+    def assert_obs(self,meas_basis):
+        print("meas_basis",meas_basis,"self.observable",self.observable)
+        if meas_basis=='x':
+                assert self.observable==ops.X
+        elif meas_basis=='z':
+            assert self.observable==ops.Z
 
-    def get_forced_outcome(self):
-        if self.name in m_collector.spd_cnt_dict:
-            forced_outcome = m_collector.spd_dict[self.name][m_collector.spd_cnt_dict[self.name]]
-            m_collector.spd_cnt_dict[self.name] += 1
-        else:
-            forced_outcome = m_collector.spd_dict[self.name][0]
-            m_collector.spd_cnt_dict[self.name] = 1
-        return forced_outcome
+        
 
 
 class BSMGatedQuantumDetector(GatedQuantumDetector):
@@ -320,7 +334,8 @@ class BSMGatedQuantumDetector(GatedQuantumDetector):
 
     def __init__(self, name, detection_window, num_input_ports=1, num_output_ports=1,
                  observable=ops.Z, meas_operators=None, system_delay=0., dead_time=0.,
-                 models=None, output_meta=None, error_on_fail=False, properties=None, end_node_dir=None, rng_measure=None, is_forced_outcome=False):
+                 models=None, output_meta=None, error_on_fail=False, properties=None, end_node_dir=None, 
+                 rng_measure=None, is_forced_outcome=False, is_forced_outcome_history=False):
         self.qin0_cnt = 0
         self.qin1_cnt = 0
         self.qin0_new_photon = False
@@ -328,6 +343,7 @@ class BSMGatedQuantumDetector(GatedQuantumDetector):
         self.end_node_dir = end_node_dir
         self.rng_measure = rng_measure
         self.is_forced_outcome = is_forced_outcome
+        self.is_forced_outcome_history=is_forced_outcome_history
         super().__init__(name, detection_window, num_input_ports, num_output_ports,
                          observable, meas_operators, system_delay, dead_time,
                          models, output_meta, error_on_fail, properties)
@@ -349,14 +365,36 @@ class BSMGatedQuantumDetector(GatedQuantumDetector):
                 operate(q1, Rx)
                 # print("Rx on right photon",q1)
 
-            if self.is_forced_outcome:
-                m1, prob1 = self.forced_my_gmeasure([q0, q1], ops.X ^ ops.Z)
-                if m1 == 0:
-                    m2, prob2 = self.forced_my_gmeasure([q0, q1], ops.Z ^ ops.X)
-                else:
-                    m2, prob2 = self.forced_my_measure(q0, ops.X)
+            #Debug
+            #picked_qstate_a, picked_qubits_a = pick_entangled_qubits(q0)
+            #print("inside BSM detector: q0",q0, picked_qubits_a, q0.qstate.qrepr)
+            #picked_qstate_a, picked_qubits_a = pick_entangled_qubits(q1)
+            #print("inside BSM detector: q1",q1, picked_qubits_a,q1.qstate.qrepr)
 
-            else:
+            if self.is_forced_outcome:
+
+                if self.is_forced_outcome_history: #Force all outcomes to be matched with outcomes in noise case. Only used when calculating the baseline for the noiseless case.
+                    m1, prob1 = self.forced_my_gmeasure([q0, q1], ops.X ^ ops.Z)
+                    if m1 == 0:
+                        m2, prob2 = self.forced_my_gmeasure([q0, q1], ops.Z ^ ops.X)
+                    else:
+                        m2, prob2 = self.forced_my_measure(q0, ops.X)
+                    #print(f"{ns.sim_time():.1f}: BSM in node {self.name},with photon {q0} and {q1}, outcome={2*m1+m2}")
+                else: #BSM successful prob is still 50%. After that, force all outcomes to be 0, which is equivalent to perfect local Pauli adjustment
+                    m1, prob1 = my_gmeasure([q0, q1], ops.X ^ ops.Z, rng_measure=self.rng_measure)
+                    # Store measurement outcome for forced outcome on noiseless case
+                    # m_collector.bsm_list.append(m1)
+                    self.store_meas_outcome(m1)
+    
+                    if m1 == 0:
+                        m2, prob2 = my_gmeasure([q0, q1], ops.Z ^ ops.X, rng_measure=ForcedRNG(0))
+                    else:
+                        m2, prob2 = my_measure(q0, ops.X, rng_measure=ForcedRNG(0))
+    
+                    # m_collector.bsm_list.append(m2)
+                    self.store_meas_outcome(m2)
+
+            else:  #Random measurment outcomes
                 m1, prob1 = my_gmeasure([q0, q1], ops.X ^ ops.Z, rng_measure=self.rng_measure)
                 # Store measurement outcome for forced outcome on noiseless case
                 # m_collector.bsm_list.append(m1)
@@ -377,7 +415,7 @@ class BSMGatedQuantumDetector(GatedQuantumDetector):
             self.ports["cout0"].tx_output(2*m1+m2)
 
         elif self.qin0_new_photon or self.qin1_new_photon:
-            self.ports["cout0"].tx_output("One photon detected in BSM")
+            #self.ports["cout0"].tx_output("One photon detected in BSM")
 
             if self.qin0_new_photon:
                 _, q0, _ = self._qubits_per_port["qin0"][0]
@@ -386,13 +424,17 @@ class BSMGatedQuantumDetector(GatedQuantumDetector):
                     operate(q0, Rx)
                 # BSMGatedQuantumDetector.debug_qubit_ls.append(q0)
                 if self.is_forced_outcome:
-                    m2, prob2 = self.forced_my_measure(q0, ops.X)
+                    if self.is_forced_outcome_history:
+                        m2, prob2 = self.forced_my_measure(q0, ops.X)
+                    else:
+                        m2, prob2 = my_measure(q0, ops.X, rng_measure=ForcedRNG(0))
+                        self.store_meas_outcome(m2)
                 else:
                     m2, prob2 = my_measure(q0, ops.X, rng_measure=self.rng_measure)
                     # m_collector.bsm_list.append(m2)
                     self.store_meas_outcome(m2)
                 # print(f"{ns.sim_time():.1f}: BSM in node {self.name},with photon {q0} from the left, outcome={m2},{prob2}")
-
+                self.ports["cout0"].tx_output(4+m2)
             else:
                 _, q1, _ = self._qubits_per_port["qin1"][0]
                 # print(f"{ns.sim_time():.1f}: BSM in node {self.name},with photon {q1} from the right")
@@ -400,12 +442,17 @@ class BSMGatedQuantumDetector(GatedQuantumDetector):
                     operate(q1, Rx)
                 # BSMGatedQuantumDetector.debug_qubit_ls.append(q1)
                 if self.is_forced_outcome:
-                    m2, prob2 = self.forced_my_measure(q1, ops.Z)
+                    if self.is_forced_outcome_history:
+                        m2, prob2 = self.forced_my_measure(q1, ops.Z)
+                    else:
+                        m2, prob2 = my_measure(q1, ops.Z, rng_measure=ForcedRNG(0))
+                        self.store_meas_outcome(m2)
                 else:
                     m2, prob2 = my_measure(q1, ops.Z, rng_measure=self.rng_measure)
                     # m_collector.bsm_list.append(m2)
                     self.store_meas_outcome(m2)
                 # print(f"{ns.sim_time():.1f}: BSM in node {self.name},with photon {q1} from the right, outcome={m2},{prob2}")
+                self.ports["cout0"].tx_output(6+m2)
 
         self.qin0_new_photon = False
         self.qin1_new_photon = False
@@ -474,8 +521,8 @@ class CorePhotonicProcessing(QuantumChannel):
     Modeled by quantum channel because photonic gates are performed by passive linear optic elements
     """
 
-    def __init__(self, name, delay=0):
-        super().__init__(name=name, delay=delay)
+    def __init__(self, name, delay=0, length=0,models=None):        
+        super().__init__(name=name, delay=delay, length=length, models=models)
 
     def preprocess_inputs(self, delay, qubits):
         # operate(qubits[0], Rz)
@@ -497,8 +544,8 @@ class Level2CorePhotonicProcessing(QuantumChannel):
     Modeled by quantum channel because photonic gates are performed by passive linear optic elements
     """
 
-    def __init__(self, name, delay=0):
-        super().__init__(name=name, delay=delay)
+    def __init__(self, name, delay=0,length=0,models=None):
+        super().__init__(name=name, delay=delay, length=length, models=models)
 
     def preprocess_inputs(self, delay, qubits):
         operate(qubits[0], H)

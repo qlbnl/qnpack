@@ -12,8 +12,56 @@ from qnpack.APE.lib.programs import (
     my_INSTR_MEASURE_Y,
     my_INSTR_MEASURE_Z
 )
+from qnpack.APE.lib.models import m_collector
+from qnpack.APE.lib.drawGS import plot_qubit_graph_without_split, pick_entangled_qubits
+from qnpack.APE.lib.verification import verification
 
 log = logging.getLogger(__name__)
+
+
+class ControlProtocol(NodeProtocol):
+    """Protocol on control node to receive measurement results and send to the end node
+    """
+
+    def __init__(self, cfg, node, num_repeater, name=None):
+        # name = name if name else "ControlProtocol{}".format(node.name)
+        self.meas_results = {}
+        self.num_repeater = num_repeater
+        self.cfg = cfg
+        super().__init__(node=node, name=name)
+
+    def run(self):
+        log.debug('control protocol is run')
+        yield from self.recv_ctrl_msg()
+        log.debug("In control protocol, msg are received from all BSM nodes:", self.meas_results)
+        #verify = verification(self.num_repeater, self.cfg.rgs.num_branches_half, self.meas_results)
+        #verify.start()
+        #qrepr_veri = verify.get_expected_Bell_pair()
+        #log.debug("qrepr_veri inside control protocol", qrepr_veri)
+        #self.send_ctrl_msg(nname="a", msg=qrepr_veri)
+        #self.send_ctrl_msg(nname="b", msg=qrepr_veri)
+        #log.debug("Complete sending ctrl msg")
+
+    def send_ctrl_msg(self, nname, msg=""):
+        self.node.ports[f"cport_to_{nname}"].tx_output(msg)
+
+    def recv_ctrl_msg(self):  # what is supposed to input into nodes? can I just use num_repeater?
+        ev_expr = None
+        num_bsm = self.num_repeater+1
+        for n in range(num_bsm):
+            cport = self.node.ports[f"cport_from_bsm{n}"]
+            ev_expr |= self.await_port_input(cport)
+        waiting = num_bsm*2  # Each bsm contains two protocols (left and right) to send message to control node
+        while waiting:
+            log.debug("waiting for message in control node", ev_expr)
+            yield ev_expr
+            log.debug("one message in control node arrived")
+            rport = ev_expr.triggered_events[0].source
+            res = rport.rx_input()
+            protocol, result = res.items[0]
+            log.debug('rport', rport, "res", res, "res.items[0]", res.items[0])
+            self.meas_results[protocol] = result
+            waiting -= 1
 
 
 class EndNodeEmissionProtocol(NodeProtocol):
@@ -40,15 +88,16 @@ class EndNodeEmissionProtocol(NodeProtocol):
         self.node.qmemory.properties["emitted_photon_cnt"] = 0
         self.matter_qubit_index = 0
         clock = self.node.subcomponents["clock"]
+        #clock.properties["start_delay"]=1
         clock.start()
         qproc = self.node.qmemory
         for i in range(len(self.neighbor_node_dir_to)):
             # Waiting for clock signal at fixed time interval
             yield self.await_port_output(clock.ports["cout"])
             if self.end_dir == self.neighbor_node_dir_to[i]:
-                # print(f"{ns.sim_time():.1f} Receive clock signal in end node {self.node.name}. Delay to emit photon at the same time as each leaf photon clock is emitted in ape node")
+                #print(f"{ns.sim_time():.1f} Receive clock signal in end node {self.node.name}. Delay to emit photon at the same time as each leaf photon clock is emitted in ape node")
                 yield self.await_timer(duration=self.leaf_photon_clock_time)
-                # print(f"{ns.sim_time():.1f} After delay, ready to initialize in end node {self.node.name}.")
+                #print(f"{ns.sim_time():.1f} After delay, ready to initialize in end node {self.node.name}.")
 
                 # Initialize matter qubit
                 qproc.execute_program(EndNodeEmitterInitProgram(), qubit_mapping=[self.matter_qubit_index])
@@ -57,13 +106,15 @@ class EndNodeEmissionProtocol(NodeProtocol):
 
                 # Send clock message
                 self.node.ports[f"cport_clock_to_{self.send_dir}"].tx_output("trigger_BSM")
-                # print(f"{ns.sim_time():.1f}: End node {self.node.name} sends BSM clock message to {self.send_dir} measurement node")
+                #print(f"{ns.sim_time():.1f}: End node {self.node.name} sends BSM clock message to {self.send_dir} measurement node")
 
                 # Emission of one photon from emitter, output at "qout{i}" of quantum processor
-                # print(f"{ns.sim_time():.1f}: Emitter {qproc.peek(self.matter_qubit_index)} at {self.node.name} is going to emit photon")
+                #print(f"{ns.sim_time():.1f}: Emitter {qproc.peek(self.matter_qubit_index)} at {self.node.name} is going to emit photon")
                 qproc.execute_instruction(INSTR_EMIT_PHOTON, [self.matter_qubit_index])
                 yield self.await_program(qproc)
-                # print(f"{ns.sim_time():.1f}: one photon is emitted from emitter at {self.node.name}")
+                #print(f"{ns.sim_time():.1f}: one photon is emitted from emitter at {self.node.name}")
+                qproc.execute_instruction(instr.INSTR_H, [self.matter_qubit_index])
+                yield self.await_program(qproc)
                 self.matter_qubit_index += 1
             # else:
                 # print(f"{ns.sim_time():.1f}:No need to emit photon from end node {self.node.name}")
@@ -74,7 +125,17 @@ class EndNodeEmissionProtocol(NodeProtocol):
             # qproc.execute_instruction(instr.INSTR_MEASURE,[0])
             # qproc.execute_instruction(INSTR_EMIT_PHOTON, [0])
 
+        # yield from self.recv_ctr_msg()
         clock.reset()
+
+    def recv_ctr_msg(self):
+        cport = self.node.ports[f"cport_from_control"]
+        ev_expr = self.await_port_input(cport)
+        yield ev_expr
+        rport = ev_expr.triggered_events[0].source
+        res = rport.rx_input()
+        protocol, result = res.items[0]
+        print('rport', rport, "res", res, "res.items[0]", res.items[0])
 
 
 class GraphStateEmissionProtocol(NodeProtocol):
@@ -82,13 +143,14 @@ class GraphStateEmissionProtocol(NodeProtocol):
     """
     PostProcessingResult = {}
 
-    def __init__(self, cfg, node, dir_to, b0, b1, name=None):
+    def __init__(self, cfg, node, dir_to, b0, b1, name=None, is_manual_noise=False):
         self.cfg = cfg
         name = name if name else "EmissionProtocol{}".format(node.name)
         self.dir_seq = dir_to
         # self.measurement_outcome_ls = []
-        self.b0 = cfg.rgs.b0
-        self.b1 = cfg.rgs.b1
+        self.b0 = b0
+        self.b1 = b1
+        self.is_manual_noise = is_manual_noise
         super().__init__(node=node, name=name)
         # print(f"{self.name} is initializing")
 
@@ -106,8 +168,10 @@ class GraphStateEmissionProtocol(NodeProtocol):
 
         for i in range(len(self.dir_seq)):  # len(self.dir_seq)=number of branches in RGS
             dir = self.dir_seq[i]
+            #print(f"{ns.sim_time():.1f}:branch{i},to direction {dir}")
             # Waiting for clock signal at fixed time interval
             yield self.await_port_output(clock.ports["cout"])
+            #print(f"{ns.sim_time():.1f}:branch{i},to direction {dir}, after waiting clock signal")
             branch_size = 1+self.b0+self.b0*self.b1
             # print(f"{ns.sim_time():.1f}: (Photons {i*branch_size+1} to {(i+1)*branch_size} of RGS) Start GS gen process at {self.node.name}")
             for k in range(self.b0):
@@ -118,7 +182,6 @@ class GraphStateEmissionProtocol(NodeProtocol):
                     # Start initialization of emitter and ancilla_1
                     qproc.execute_program(EmitterAncillaInitProgram(), qubit_mapping=[0, 1])
                     yield self.await_program(qproc)
-                    # print(f'{ns.sim_time():.1f}:initialization of emitter in {self.node.name}')
                 else:
                     qproc.execute_program(EmitterInitProgram(), qubit_mapping=[0, 1])
                     yield self.await_program(qproc)
@@ -137,13 +200,23 @@ class GraphStateEmissionProtocol(NodeProtocol):
                     self.node.ports[f"cport_clock_to_{dir}"].tx_output("trigger_SPD")
                     # print(f"{ns.sim_time():.1f}: {self.node.name} sends SPD clock message to {dir} measurement node")
 
+                    # if self.is_manual_noise: #Manual emitter noise for debugging purpose
+                    #    if i==0 and k==0 and j==0:
+                    #        #print(f'{ns.sim_time():.1f}:apply manual emitter Z error')
+                    #        qproc.execute_instruction(instr.INSTR_Z, [0])
+                    #        yield self.await_program(qproc)
+                    #        #print(f"{ns.sim_time():.1f}: Emitter {qproc.peek(0)} at {self.node.name} is going to emit photon")
+
                     # Emission of one core photon from emitter, output at "qout0" of quantum processor
-                    # print(f"{ns.sim_time():.1f}: Emitter {qproc.peek(0)} at {self.node.name} is going to emit photon")
+                    #print(f"{ns.sim_time():.1f}: Emitter {qproc.peek(0)} at {self.node.name} is going to emit photon")
                     qproc.execute_instruction(INSTR_EMIT_PHOTON, [0])
 
                     # Waiting for completed emission of core photon
                     yield self.await_program(qproc)
-                    # print(f"{ns.sim_time():.1f}: one level-2 core photon is emitted from emitter at {self.node.name}")
+                    #if j == self.b1:
+                    #    print(f"{ns.sim_time():.1f}: one level-1 core photon is emitted from emitter at {self.node.name}")
+                    #else:
+                    #    print(f"{ns.sim_time():.1f}: one level-2 core photon is emitted from emitter at {self.node.name}")
 
                     # Add buffer time between each core photon emission
                     yield self.await_timer(duration=self.cfg.emitter.photon_emission_buffer)
@@ -165,22 +238,28 @@ class GraphStateEmissionProtocol(NodeProtocol):
 
             # Send clock message to measurement node to trigger BSM detector
             self.node.ports[f"cport_clock_to_{dir}"].tx_output("trigger_BSM")
-            # print(f"{ns.sim_time():.1f}: {self.node.name} sends BSM clock message to {dir} measurement node")
+            #print(f"{ns.sim_time():.1f}: {self.node.name} sends BSM clock message to {dir} measurement node")
 
             # Trigger optical switch for leaf photon
             switch.topology = {'switch_in': f'switch_out_{dir}_leaf'}
             # print(f'{ns.sim_time():.1f}:Trigger optical switch port switch_in to switch_out_{dir}_leaf in {self.node.name}')
 
             # Emission of one leaf photon from emitter, output at "qout0" of quantum processor
-            # print(f"{ns.sim_time():.1f}: Emitter {qproc.peek(0)} at {self.node.name} is going to emit photon")
+            #print(f"{ns.sim_time():.1f}: Emitter {qproc.peek(0)} at {self.node.name} is going to emit photon")
             qproc.execute_instruction(INSTR_EMIT_PHOTON, [0])
             yield self.await_program(qproc)
-            # print(f"{ns.sim_time():.1f}: one leaf photon is emitted from emitter at {self.node.name}")
+            #print(f"{ns.sim_time():.1f}: one leaf photon is emitted from emitter at {self.node.name}")
 
             if i == 0:
                 qproc.execute_program(EndNodeEmitterInitProgram(), qubit_mapping=[2])
                 yield self.await_program(qproc)
                 # print(f"{ns.sim_time():.1f}: ancilla2 is initialized {self.node.name}")
+
+            if self.is_manual_noise:  # Manual emitter noise for debugging purpose
+                if i == 0:
+                    print(f'{ns.sim_time():.1f}:apply manual emitter Z error before CZ between emitter and ancilla 2')
+                    qproc.execute_instruction(instr.INSTR_Z, [0])
+                    yield self.await_program(qproc)
 
             qproc.execute_instruction(instr.INSTR_CZ, [0, 2])
             yield self.await_program(qproc)
@@ -203,10 +282,11 @@ class GraphStateEmissionProtocol(NodeProtocol):
         # yield self.await_program(qproc)
         # print(f"{ns.sim_time():.1f}:Rx gate on ancilla2 qubit.")
 
-        # ancilla2=qproc.peek(2)[0]
+        ancilla2 = qproc.peek(2)[0]
+        # print("ancilla 2 state",ancilla2.qstate.qubits,ancilla2.qstate.indices_of(ancilla2.qstate.qubits),ancilla2.qstate.qrepr)
+        # picked_qstate, picked_qubits = pick_entangled_qubits(ancilla2)
+        # print("ancilla2",picked_qstate, picked_qubits)
         # plot_qubit_graph_without_split(ancilla2)
-        # plot_qubit_graph(ancilla2)
-        # print("ancilla 2 is",ancilla2)
         m2 = qproc.execute_instruction(my_INSTR_MEASURE_Y, [2], output_key="M2")
         yield self.await_program(qproc)
         # print(f"{ns.sim_time():.1f}:Y-measurement result of ancilla2 qubit= {m2[0]['M2']}. Need to send to measurement node for postprocessing, to be updated later.")
@@ -332,11 +412,11 @@ class LeafRecvProtocol(NodeProtocol):
             if evexpr.second_term.value:
                 m = port.rx_output().items[0]
                 self.bsm_result.append(m)
-                # print(f"{ns.sim_time():.1f}: Measurement outcome in BSM is {m}")
+                # print(f"{ns.sim_time():.1f}: {self.name} Measurement outcome in BSM is {m}")
                 # self.send_signal(self.bsm_finished_label,result=(m))
                 self.send_signal(self.bsm_finished_label, result=(m))
             else:
-                # print(f"{ns.sim_time():.1f}: No photon is detected within BSM detection window")
+                # print(f"{ns.sim_time():.1f}: {self.name} No photon is detected within BSM detection window")
                 self.send_signal(self.bsm_finished_label, result=("No photon detected in BSM"))
 
 
@@ -406,7 +486,8 @@ class CoreRecvProtocol(NodeProtocol):
 
         detector_dead = False
         detected = False
-        wait_detector_dead = self.await_timer(duration=self.cfg.spd.detection_window + self.cfg.emitter.photon_emission_buffer)
+        wait_detector_dead = self.await_timer(
+            duration=self.cfg.spd.detection_window + self.cfg.emitter.photon_emission_buffer)
         port = sp_detector.ports['cout0']
         wait_detected = self.await_port_output(port)
         while not detector_dead:
@@ -473,7 +554,8 @@ class CoreRecvProtocol(NodeProtocol):
                 return level1_z_result
             level1_z_ls.append(level1_z_result)
         logical_z = (sum(level1_z_ls)) % 2
-        # print("tree_ls",tree_ls,"logical_z",logical_z)
+        # if logical_z==1:
+        #    print("tree_ls",tree_ls,"level1_z_ls",level1_z_ls,"logical_z",logical_z)
         return logical_z
 
     def cal_logical_x_outcome(self, tree_ls):
@@ -514,6 +596,8 @@ class CoreRecvProtocol(NodeProtocol):
             #    logical_x=0
             # else:
             #    logical_x=1
+        # if logical_x==1:
+        # print("tree_ls",tree_ls,"logical_x_ls",logical_x_ls,"logical_x",logical_x)
         # print("tree_ls",tree_ls,"logical_x",logical_x)
         return logical_x
 
@@ -560,7 +644,8 @@ class CoreRecvProtocol(NodeProtocol):
                         elif m == 2 or m == 3:
                             yield from self.logical_z_core()
                             # print(f"{ns.sim_time():.1f}: BSM fails. SPD in Z basis is triggered for core photons arriving from {self.dir_from} in {self.node.name}")
-                        elif m == "No photon detected in BSM" or m == "One photon detected in BSM":  # Add here single photon detected
+                        # elif m == "No photon detected in BSM" or m == "One photon detected in BSM":  # Add here single photon detected
+                        elif m == "No photon detected in BSM" or m in [4, 5, 6, 7]:
                             yield from self.logical_z_core()
                             # print(f"{ns.sim_time():.1f}: Fewer than 2 photons arrived at BSM. SPD in Z basis is triggered for core photons arriving from {self.dir_from} in {self.node.name}")
                         elif m == 0 or m == 1:
@@ -576,16 +661,16 @@ class CoreRecvProtocol(NodeProtocol):
                       self.spd_result_ls)  # Need to modify spd_succeed
             self.send_signal(Signals.SUCCESS, result=result)
 
-            # Announce measurement results from the leftmost bsm node to the end node b.
-            # if self.node.name=="node_bsm0":
-            #    #print(f"{ns.sim_time():.1f}:sending results here")
-            #    self.node.ports[f"cport_to_node_b"].tx_output("measurement result")
-            # print(f"{ns.sim_time():.1f}:at the end of {self.name}, {result}")
+            # Announce measurement results from the bsm node to the control node
+            log.debug(f"{ns.sim_time():.1f}:sending results from bsm to control node, {self.name},{result}")
+            self.node.ports[f"cport_to_control"].tx_output((self.name, result))
             CoreRecvProtocol.PostProcessingResult[f"{self.name}"] = result  # Need to handle majority vote later
+            # Store logical results of core qubits of each CRP
+            m_collector.core_logical_result[f"{self.name}"] = self.spd_result_ls
             # print(f"{ns.sim_time():.1f}: From {self.name}, bsm_result_ls {self.bsm_result_ls},spd_result_ls {self.spd_result_ls}")
 
 
-def setup_repeater_protocol(cfg, network, bsm_nodes, ape_nodes, end_ape_nodes, rgs_size, num_repeater):
+def setup_repeater_protocol(cfg, network, bsm_nodes, ape_nodes, end_ape_nodes, rgs_size, num_repeater, is_manual_noise):
     """Setup repeater protocol on repeater chain network.
 
     Parameters
@@ -599,15 +684,20 @@ def setup_repeater_protocol(cfg, network, bsm_nodes, ape_nodes, end_ape_nodes, r
         Protocol holding all subprotocols used in the network.
 
     """
+    b0 = cfg.rgs.b0
+    b1 = cfg.rgs.b1
     protocol_name = f"local_protocol_for_{network.name}"
     protocol = LocalProtocol(nodes=network.nodes)
     num_matter_qubit = int(rgs_size/2)
     # Add SwapProtocol to all repeater nodes. Note: we use unique names,
     # since the subprotocols would otherwise overwrite each other in the main protocol.
-    ape_photon_table = ((["level2_core"]*cfg.rgs.b1+["level1_core"])*cfg.rgs.b0+["leaf"])*int(rgs_size/2)
+    ape_photon_table = ((["level2_core"]*b1+["level1_core"])*b0+["leaf"])*int(rgs_size/2)
     end_photon_table = ["leaf"]*int(rgs_size/2)
 
-    # GraphStateEmissionProtocol
+    # Set up control node protocol
+    control_protocol = ControlProtocol(cfg, network.get_node("node_c"), num_repeater)
+    protocol.add_subprotocol(control_protocol)
+
     # Set up end node protocols
     end_node_emission_protocol_a = EndNodeEmissionProtocol(cfg, network.get_node(
         "node_a"), num_matter_qubit=num_matter_qubit, end_dir="left", neighbor_node_dir_to=["right", "left"]*int(rgs_size/2))
@@ -624,10 +714,10 @@ def setup_repeater_protocol(cfg, network, bsm_nodes, ape_nodes, end_ape_nodes, r
     for i in range(len(ape_nodes)):
         if i % 2 == 0:
             graph_state_emission_protocol = GraphStateEmissionProtocol(cfg, network.get_node(f"node_{ape_nodes[i]}"), dir_to=[
-                                                                       "right", "left"]*int(rgs_size/2), b0=cfg.rgs.b0, b1=cfg.rgs.b1, name=f"GSEP_{ape_nodes[i]}")
+                                                                       "right", "left"]*int(rgs_size/2), b0=b0, b1=b1, name=f"GSEP_{ape_nodes[i]}", is_manual_noise=is_manual_noise)
         else:
             graph_state_emission_protocol = GraphStateEmissionProtocol(cfg, network.get_node(f"node_{ape_nodes[i]}"), dir_to=[
-                                                                       "left", "right"]*int(rgs_size/2), b0=cfg.rgs.b0, b1=cfg.rgs.b1, name=f"GSEP_{ape_nodes[i]}")
+                                                                       "left", "right"]*int(rgs_size/2), b0=b0, b1=b1, name=f"GSEP_{ape_nodes[i]}", is_manual_noise=is_manual_noise)
         protocol.add_subprotocol(graph_state_emission_protocol)
 
     # Set up bsm node protocols
@@ -640,23 +730,23 @@ def setup_repeater_protocol(cfg, network, bsm_nodes, ape_nodes, end_ape_nodes, r
                 bsm_node, left_photon_table=end_photon_table, right_photon_table=ape_photon_table, name=f"ClRP_{bsm_nodes[i]}")
             leaf_recv_protocol = LeafRecvProtocol(cfg, bsm_node, clock_recv_protocol, name=f"LRP_{bsm_nodes[i]}")
             core_recv_protocol_right = CoreRecvProtocol(cfg, bsm_node, leaf_recv_protocol, clock_recv_protocol, dir_from="right",
-                                                        rgs_size=rgs_size, b0=cfg.rgs.b0, b1=cfg.rgs.b1, name=f"CRPR_{bsm_nodes[i]}")  # don't need this for bsm node connected to right end node
+                                                        rgs_size=rgs_size, b0=b0, b1=b1, name=f"CRPR_{bsm_nodes[i]}")  # don't need this for bsm node connected to right end node
             protocol.add_subprotocol(core_recv_protocol_right)
         elif i == len(bsm_nodes)-1:
             clock_recv_protocol = ClockRecvProtocol(
                 bsm_node, left_photon_table=ape_photon_table, right_photon_table=end_photon_table, name=f"ClRP_{bsm_nodes[i]}")
             leaf_recv_protocol = LeafRecvProtocol(cfg, bsm_node, clock_recv_protocol, name=f"LRP_{bsm_nodes[i]}")
             core_recv_protocol_left = CoreRecvProtocol(cfg, bsm_node, leaf_recv_protocol, clock_recv_protocol, dir_from="left",
-                                                       rgs_size=rgs_size, b0=cfg.rgs.b0, b1=cfg.rgs.b1, name=f"CRPL_{bsm_nodes[i]}")  # don't need this for bsm node connected to left end node
+                                                       rgs_size=rgs_size, b0=b0, b1=b1, name=f"CRPL_{bsm_nodes[i]}")  # don't need this for bsm node connected to left end node
             protocol.add_subprotocol(core_recv_protocol_left)
         else:
             clock_recv_protocol = ClockRecvProtocol(
                 bsm_node, left_photon_table=ape_photon_table, right_photon_table=ape_photon_table, name=f"ClRP_{bsm_nodes[i]}")
             leaf_recv_protocol = LeafRecvProtocol(cfg, bsm_node, clock_recv_protocol, name=f"LRP_{bsm_nodes[i]}")
             core_recv_protocol_left = CoreRecvProtocol(cfg, bsm_node, leaf_recv_protocol, clock_recv_protocol, dir_from="left",
-                                                       rgs_size=rgs_size, b0=cfg.rgs.b0, b1=cfg.rgs.b1, name=f"CRPL_{bsm_nodes[i]}")  # don't need this for bsm node connected to left end node
+                                                       rgs_size=rgs_size, b0=b0, b1=b1, name=f"CRPL_{bsm_nodes[i]}")  # don't need this for bsm node connected to left end node
             core_recv_protocol_right = CoreRecvProtocol(cfg, bsm_node, leaf_recv_protocol, clock_recv_protocol, dir_from="right",
-                                                        rgs_size=rgs_size, b0=cfg.rgs.b0, b1=cfg.rgs.b1, name=f"CRPR_{bsm_nodes[i]}")  # don't need this for bsm node connected to right end node
+                                                        rgs_size=rgs_size, b0=b0, b1=b1, name=f"CRPR_{bsm_nodes[i]}")  # don't need this for bsm node connected to right end node
             protocol.add_subprotocol(core_recv_protocol_left)
             protocol.add_subprotocol(core_recv_protocol_right)
 
