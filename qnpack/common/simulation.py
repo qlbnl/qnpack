@@ -2,6 +2,7 @@ import os
 import logging
 from abc import ABC, abstractmethod
 from qnpack.common.config import Config
+from qnpack.common.constants import Constants
 
 
 log = logging.getLogger(__name__)
@@ -14,11 +15,11 @@ class Simulation(ABC):
                  varying_params=dict(),
                  output_dir=None,
                  logfile=None,
-                iterations: int = 1):
+                 iterations: int = 1):
 
         self.param_file = parameter_file or Constants.DEFAULT_PARAM_FILE
         self.output_dir = output_dir or Constants.DEFAULT_OUTPUT_DIR
-        self.cfg = Config(parameter_file)
+        self.cfg = Config(parameter_file) if parameter_file else Config()
         self.varying_params = varying_params
         self.fixed_params = fixed_params
         self.iterations = iterations
