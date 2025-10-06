@@ -17,7 +17,7 @@ Project Team
 * Sophia Euconomou -- Virginia Tech
 * Edwin Barnes -- Virginia Tech
 
-* Charu Chain -- Lawrence Berkeley National Lab
+* Charu Jain -- Lawrence Berkeley National Lab
 * Ezra Kissel -- Lawrence Berkeley National Lab
 * Wenji Wu -- Lawrence Berkeley National Lab
 * Inder Monga -- Lawrence Berkeley National Lab
