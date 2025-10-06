@@ -13,14 +13,14 @@ QNPack is a collaboration between ESnet at Lawrence Berkeley National Lab and Vi
 Project Team
 ----------------
 
-* Chuen-Hei Chan -- Virginia Tech
-* Sophia Euconomou -- Virginia Tech
-* Edwin Barnes -- Virginia Tech
-
-* Charu Jain -- Lawrence Berkeley National Lab
+* Charu Chain -- Lawrence Berkeley National Lab
 * Ezra Kissel -- Lawrence Berkeley National Lab
 * Wenji Wu -- Lawrence Berkeley National Lab
 * Inder Monga -- Lawrence Berkeley National Lab
+
+* Chuen-Hei Chan -- Virginia Tech
+* Sophia Euconomou -- Virginia Tech
+* Edwin Barnes -- Virginia Tech
 
 Contact
 -------
