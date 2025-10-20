@@ -475,8 +475,8 @@ class IonTrapSimulation(Simulation):
 
             if right_node != last_bsm_node:
                 self.bsm_node_setup(right_node, qport_left_name=f"qport_{right}_{middle}",
-                                    qport_right_name=f"qport_{right}_{next_repeater}")
-                #    coupling_efficiency=coupling_efficiency)
+                                    qport_right_name=f"qport_{right}_{next_repeater}",
+                                    coupling_efficiency=coupling_efficiency)
 
             # add classical channel from all repeater nodes to the control node
             # print(f"Distance between node_c and {middle}", distances[f"{middle}"])

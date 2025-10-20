@@ -10,6 +10,7 @@ from netsquid.protocols.protocol import Signals
 from qnpack.oneG.advanced_ion_trap import AdvRetryEmitProgram
 from qnpack.oneG.lib.programs import CorrectionProgram
 from qnpack.common.utils import calculate_distances
+import re
 
 
 log = logging.getLogger(__name__)
@@ -157,12 +158,12 @@ class PhotonEmissionProtocol(NodeProtocol):
                     self.ion_trap.spin_echo(spin_echo_sim_time=self.cfg.ion_trap.spin_echo_sim_time)
                     self.ion_trap.spin_echo(spin_echo_sim_time=self.cfg.ion_trap.spin_echo_sim_time)
                     yield self.await_timer(duration=3*self.cfg.ion_trap.spin_echo_sim_time*1e3)
-                self.ion_trap.state_initialization(
-                    node_name=self.node.name)
+                if retries != 0:
+                    self.ion_trap.state_initialization(node_name=self.node.name)
                 self.node.qmemory.execute_program(
                     AdvRetryEmitProgram(), qubit_mapping=[0, 1])
                 yield self.await_program(self.node.qmemory)
-
+                log.debug(f"Matter qubit state in {self.node.name} after emission, {self.node.qmemory.peek(positions=[0])[0].qstate.qrepr} {ns.sim_time()}")
                 # Wait for BSM result
                 yield self.await_port_input(self.res_port)
                 res = self.res_port.rx_input()
@@ -207,9 +208,12 @@ class BSMProtocol(NodeProtocol):
             max_distance = max(distances.values())
             trigger_travel_time = (max_distance/self.cfg.network.q_lightspeed)*1e9
             if retries == 0:
-                wait_duration = self.cfg.ion_trap.emission_duration
-                yield self.await_timer(duration=self.cfg.ion_trap.emission_duration)
-                yield self.await_timer(duration=trigger_travel_time)
+                match = re.search(r"(\d+)$", self.node.name)
+                if match:
+                    node_num = int(match.group(1))
+                if node_num % 2 != 0:
+                    yield self.await_timer(duration=self.cfg.ion_trap.emission_duration)
+                    yield self.await_timer(duration=trigger_travel_time)
             if self.clk.is_running is not True:
                 self.clk.start()
             log.debug(
@@ -391,13 +395,14 @@ class RepeaterEmissionProtocol(NodeProtocol):
                     self.ion_trap.spin_echo(spin_echo_sim_time=self.cfg.ion_trap.spin_echo_sim_time)
                     self.ion_trap.spin_echo(spin_echo_sim_time=self.cfg.ion_trap.spin_echo_sim_time)
                     yield self.await_timer(duration=3*self.cfg.ion_trap.spin_echo_sim_time*1e3)
-                self.ion_trap.state_initialization(
-                    node_name=self.node.name, topo=[emission_map[0]])
+                if retries != 0:
+                    self.ion_trap.state_initialization(
+                        node_name=self.node.name, topo=[emission_map[0]])
                 self.node.qmemory.execute_program(
                     AdvRetryEmitProgram(), qubit_mapping=[emission_map[0], 2])
                 yield self.await_program(self.node.qmemory)
-                # log.debug(
-                #     f"Matter qubit state in {self.node.name} after emission, {self.node.qmemory.peek(positions=emission_map[0])[0].qstate.qrepr} {ns.sim_time()}")
+                log.debug(
+                    f"Matter qubit state in {self.node.name} after emission, {self.node.qmemory.peek(positions=emission_map[0])[0].qstate.qrepr} {ns.sim_time()}")
 
                 # Wait on BSM result
                 yield self.await_port_input(res_port)
