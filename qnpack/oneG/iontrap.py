@@ -34,13 +34,11 @@ log = logging.getLogger(__name__)
 class IonTrapSimulation(Simulation):
     def __init__(self, logfile=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        log.info(f"Configuration:\n{self.cfg}")
-
+        
         setup_logging(name=__name__,
                       level=logging.DEBUG if self.cfg.sim.debug else logging.INFO,
                       logfile=logfile)
-
+        log.info(f"Configuration:\n{self.cfg}")
 
     def plot(self, final_data, x_axis1, y_axis1, xlabel1, ylabel1, label_param1, 
               x_axis2, y_axis2, xlabel2, ylabel2, label_param2,
@@ -93,7 +91,7 @@ class IonTrapSimulation(Simulation):
 
         log.info(f"Running simulation with parameters: {self.varying_params}")
         log.info(f"Fixed parameters: {self.fixed_params}")
-        log.info(f"Iterations: {self.iterations}")
+        log.info(f"Iterations: {self.cfg.sim.iterations}")
 
         # Generate all combinations of varying parameters
         for param_values in itertools.product(*self.varying_params.values()):
@@ -182,8 +180,8 @@ class IonTrapSimulation(Simulation):
             dc = self.setup_datacollector(node_q1, node_q2, protocol)
             error_count = 0
             # Run trials
-            fidelities, times = [], []
-            for i in range(self.iterations):
+            fidelities, times, success_times, num_retries = [], [], [], []
+            for i in range(self.cfg.sim.iterations):
                 if not i:
                     try:
                         protocol.start()
@@ -210,58 +208,59 @@ class IonTrapSimulation(Simulation):
 
                 ns.sim_run()
                 try:
-                    # Check if any fidelity values are -1
-                    # check retries here also if needed
-                    if (dc.dataframe['fidelity'] == -1).any():
-                        s_time = (protocol.subprotocols['node_c'].end_time -
-                                  protocol.subprotocols['node_c'].start_time)/1e9
-                        times.append(s_time)
+                    if dc.dataframe.loc[0, 'fidelity'] == -1:
                         log.info("-1 detected, filtering iteration data")
+                        fidelities.append(-1)
+                    else:
+                        fidelities.append(dc.dataframe.loc[0, 'fidelity'])
+                        retries_itr = protocol.subprotocols['node_c'].retries
+                        avg_retries = round(sum(retries_itr) / len(retries_itr))
+                        if dc.dataframe.loc[0, 'fidelity'] > 0.2:
+                            # for retry in retries_itr:
+                            num_retries.append(avg_retries)
+                    s_time = (protocol.subprotocols['node_c'].end_time - protocol.subprotocols['node_c'].start_time)/1e9
+                    times.append(s_time)
+                    success_times.append(s_time)
                 except KeyError:
-                    s_time = (protocol.subprotocols['node_c'].end_time -
-                              protocol.subprotocols['node_c'].start_time)/1e9
+                    s_time = (protocol.subprotocols['node_c'].end_time - protocol.subprotocols['node_c'].start_time)/1e9
                     times.append(s_time)
                     error_count += 1
                     if error_count == self.cfg.sim.iterations:
                         # this means that all iterations had errors, so adding the fidelity value only for the last iteration
-                        fidelities.append(0)
-                    log.warning(
-                        f"KeyError: Fidelity column missing, skipping iteration")
+                        fidelities.append(-1)
+                    log.warning(f"KeyError: Fidelity column missing, skipping iteration")
                     continue
-            
+
             try:
                 # Filter out -1 values and append valid fidelities once
-                valid_fidelities = dc.dataframe.loc[dc.dataframe['fidelity']
-                                                    != -1, 'fidelity'].tolist()
+                valid_fidelities = [f for f in fidelities if f != -1]
             except KeyError:
                 log.warning("KeyError: No valid fidelities")
                 valid_fidelities = None
-                rate = 0
+                total_rate = 0
             if valid_fidelities:
-                log.debug(f"Appending valid fidelities: {valid_fidelities}")
-                fidelities.extend(valid_fidelities)
                 log.info(f"\t  Fidelities: {[round(x,2) for x in fidelities]}")
-                total_time = sum(dc.dataframe['time'].to_list())
-                if len(times) != 0:
-                    total_time = total_time + sum(times)
-                num_success = len(valid_fidelities)
-                rate = num_success / total_time
-                log.info(
-                    f"\t  Rate of Entanglement: {round(rate,2)}, with total time: {total_time} and number of success: {num_success}")
-            else:
                 if len(times) != 0:
                     total_time = sum(times)
+                num_success = len(valid_fidelities)
+                rate = num_success / total_time
+                log.info(f"\t  Rate of Entanglement: {round(rate,2)} with total time: {total_time} and number of success: {num_success}")
+            else:
+                if len(times) != 0:
+                    total_time = total_time + sum(times)
                 num_success = 0
-                rate = 0
-                log.info(
-                    f"\t  Rate of Entanglement: {round(rate,2)}, with total time: {total_time} and number of success: {num_success}")
+                total_rate = 0
+                log.info(f"\t  Rate of Entanglement: {round(rate,2)}, with total time: {total_time} and number of success: {num_success}")
             # Store the mean and SEM of fidelities for each configuration
-            if len(fidelities) > 0:
-                mean_fidelity = np.mean(fidelities)
+            if len(valid_fidelities) > 0:
+                true_fidelities = [round(x,2) for x in valid_fidelities]
+                mean_fidelity = np.mean(true_fidelities)
+                mean_time = np.mean(success_times)
+                mean_retries = np.mean(num_retries)
                 log.info(f"\t  Mean Fidelity: {mean_fidelity}")
-                if len(fidelities) > 1:
-                    sem_fidelity = np.std(fidelities, ddof=1) / \
-                        np.sqrt(len(fidelities))
+                if len(valid_fidelities) > 1:
+                    sem_fidelity = np.std(valid_fidelities, ddof=1) / \
+                        np.sqrt(len(valid_fidelities))
                 else:
                     sem_fidelity = 0
             else:
@@ -272,7 +271,9 @@ class IonTrapSimulation(Simulation):
                 **param_dict,  # Store the varying parameters
                 'fidelity': mean_fidelity,
                 'sem': sem_fidelity,
-                'rate': rate
+                'rate': rate,
+                'mean_retries': mean_retries,
+                'num_success': num_success
             })
         return final_data
 
@@ -475,8 +476,8 @@ class IonTrapSimulation(Simulation):
 
             if right_node != last_bsm_node:
                 self.bsm_node_setup(right_node, qport_left_name=f"qport_{right}_{middle}",
-                                    qport_right_name=f"qport_{right}_{next_repeater}",
-                                    coupling_efficiency=coupling_efficiency)
+                                    qport_right_name=f"qport_{right}_{next_repeater}")
+                #    coupling_efficiency=coupling_efficiency)
 
             # add classical channel from all repeater nodes to the control node
             # print(f"Distance between node_c and {middle}", distances[f"{middle}"])
@@ -733,13 +734,16 @@ if __name__ == "__main__":
     }
 
     varying_params = {
-        "num_repeaters": [1, 3, 5],
-        "distance": [20, 50, 100],
+        "num_repeaters": [1, 2, 3, 4, 5, 6, 7, 8],
+        "distance": [20, 50, 80],
     }
+    directory = "results/rate_fid"
     sim = IonTrapSimulation(fixed_params=fixed_params,
                              varying_params=varying_params,
-                             parameter_file=config_file,
-                             output_dir="results",
-                             #logfile=""
+                             parameter_file="parameters.yml",
+                             output_dir=directory,
+                             # logfile=""
                              )
-    sim.start()
+    final_data = sim.start()
+    data = pandas.DataFrame(final_data)
+    data.to_csv(f"{directory}/rate_fid21.csv", sep=',')

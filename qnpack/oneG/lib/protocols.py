@@ -158,7 +158,7 @@ class PhotonEmissionProtocol(NodeProtocol):
                     self.ion_trap.spin_echo(spin_echo_sim_time=self.cfg.ion_trap.spin_echo_sim_time)
                     self.ion_trap.spin_echo(spin_echo_sim_time=self.cfg.ion_trap.spin_echo_sim_time)
                     yield self.await_timer(duration=3*self.cfg.ion_trap.spin_echo_sim_time*1e3)
-                if retries != 0:
+                if self.retries != 0:
                     self.ion_trap.state_initialization(node_name=self.node.name)
                 self.node.qmemory.execute_program(
                     AdvRetryEmitProgram(), qubit_mapping=[0, 1])
@@ -454,6 +454,7 @@ class ControlProtocol(NodeProtocol):
         self.bsm_results = dict()
         self.end_result = list()
         self.repeater_results = list()
+        self.retries = list()
         self.both_ends_proto_flag = False
         self.single_bsm_proto_flag = False
         self.shared_repeater_proto_flag = False
@@ -486,6 +487,7 @@ class ControlProtocol(NodeProtocol):
             yield ev_expr
             rport = ev_expr.triggered_events[0].source
             res = rport.rx_input()
+            self.retries.append(res.items[0].retries)
             self.bsm_results[res.items[0].node] = res.items
             waiting -= 1
 
@@ -570,6 +572,7 @@ class ControlProtocol(NodeProtocol):
         self.bsm_results = dict()
         self.repeater_results = list()
         self.end_result = list()
+        self.retries = list()
         self.single_bsm_proto_flag = False
         self.both_ends_proto_flag = False
         self.shared_repeater_proto_flag = False

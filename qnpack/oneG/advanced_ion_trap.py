@@ -184,8 +184,6 @@ class CustomEmissionNoiseModel(QuantumErrorModel):
             depol_prob = 4 / 3 * (1 - self.fidelity)
             # note that depolarizing one qubit in Bell state is equivalent to depolarizing the two-qubit state
             qapi.depolarize(qubits[0], depol_prob)
-            
- # write a diff name
 
 
 class AdvEmitProgram(QuantumProgram):

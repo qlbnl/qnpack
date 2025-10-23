@@ -121,7 +121,7 @@ double compute_repeater_rate(
         int max_s_L = max_svalues[i];
         T_avg += PL[i] * (1.0 - P_R) * (
             T_retry * (max_s_L + retries + 1)
-            + DBSM_time
+            + BSM_time
             + ((retries + 1.0 / 5.0) * spin_echo_time)
             + 2 * ctrl_time
             );
