@@ -181,7 +181,11 @@ class IonTrapSimulation(Simulation):
             error_count = 0
             # Run trials
             fidelities, times, success_times, num_retries = [], [], [], []
+            rows_added = False
+            diff = 0
             for i in range(self.cfg.sim.iterations):
+                log.info(
+                    f"\t  Running iteration {i+1} of [{self.cfg.sim.iterations} total iters]")
                 if not i:
                     try:
                         protocol.start()
@@ -205,23 +209,29 @@ class IonTrapSimulation(Simulation):
                         r_node = network.get_node(r_node_name)
                         r_node.subcomponents['ion_trap_quantum_communication_device'].resample()
                         r_node.subcomponents['ion_trap_quantum_communication_device'].state_initialization(node_name=r_node_name, topo=[0, 1])
-
                 ns.sim_run()
                 try:
-                    if dc.dataframe.loc[0, 'fidelity'] == -1:
-                        log.info("-1 detected, filtering iteration data")
-                        fidelities.append(-1)
-                    else:
-                        fidelities.append(dc.dataframe.loc[0, 'fidelity'])
-                        retries_itr = protocol.subprotocols['node_c'].retries
-                        avg_retries = round(sum(retries_itr) / len(retries_itr))
-                        if dc.dataframe.loc[0, 'fidelity'] > 0.2:
-                            # for retry in retries_itr:
-                            num_retries.append(avg_retries)
+                    if len(dc.dataframe) != diff:
+                        rows_added=True
+                        diff = len(dc.dataframe)
+                    if rows_added:
+                        fid = dc.dataframe.loc[diff-1, 'fidelity']
+                        if fid == -1:
+                            log.info("-1 detected, filtering iteration data")
+                            fidelities.append(-1)
+                        else:
+                            fidelities.append(fid)
+                            retries_itr = protocol.subprotocols['node_c'].retries
+                            avg_retries = round(sum(retries_itr) / len(retries_itr))
+                            if fid > 0.2:
+                                # for retry in retries_itr:
+                                num_retries.append(avg_retries)
                     s_time = (protocol.subprotocols['node_c'].end_time - protocol.subprotocols['node_c'].start_time)/1e9
                     times.append(s_time)
                     success_times.append(s_time)
-                except KeyError:
+                    rows_added=False
+                except KeyError as e:
+                    log.info(f"Key error: {e}")
                     s_time = (protocol.subprotocols['node_c'].end_time - protocol.subprotocols['node_c'].start_time)/1e9
                     times.append(s_time)
                     error_count += 1
@@ -239,6 +249,7 @@ class IonTrapSimulation(Simulation):
                 valid_fidelities = None
                 total_rate = 0
             if valid_fidelities:
+                log.info(f"Valid fidelities: {valid_fidelities}")
                 log.info(f"\t  Fidelities: {[round(x,2) for x in fidelities]}")
                 if len(times) != 0:
                     total_time = sum(times)
@@ -697,7 +708,6 @@ class IonTrapSimulation(Simulation):
         """
 
         def calc_fidelity(evexpr):
-            log.debug("Entering the calc fidelity func")
             q_a, = node_q1.qmemory.peek(positions=[0])
             q_b, = node_q2.qmemory.peek(positions=[0])
             eigen_state1 = SparseDMRepr(
@@ -730,14 +740,14 @@ if __name__ == "__main__":
         config_file = sys.argv[1]
 
     fixed_params = {
-        "ion_trap": {"coherence_time": 60000000}
+        # "ion_trap": {"coherence_time": 60000000}
     }
 
     varying_params = {
-        "num_repeaters": [1, 2, 3, 4, 5, 6, 7, 8],
-        "distance": [20, 50, 80],
+        "num_repeaters": [1, 2], #, 2, 3, 4, 5, 6, 7, 8],
+        "distance": [20] #, 50, 80],
     }
-    directory = "results/rate_fid"
+    directory = "results/rate"
     sim = IonTrapSimulation(fixed_params=fixed_params,
                              varying_params=varying_params,
                              parameter_file="parameters.yml",

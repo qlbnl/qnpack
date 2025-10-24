@@ -1,6 +1,6 @@
 sim:
-  iterations: 8
-  debug: false
+  iterations: 15
+  debug: False
 
 clock:
   HZ: 1000000  # 1 MHz
@@ -15,7 +15,7 @@ bsm:
   coupling_efficiency: 0.9 #0.75
 
 ion_trap:
-  noise_model: 0  # 0 for noiseless, 1 for noisy
+  noise_model: 1  # 0 for noiseless, 1 for noisy
   initial_velocity: 1.0 
   ion_mass: 0.0000000000000000000000000664 #6.64e-26 
   decay_rate: 11490000 #6e6
