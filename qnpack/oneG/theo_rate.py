@@ -376,17 +376,20 @@ if __name__ == "__main__":
         config_file = sys.argv[1]
 
     fixed_params = {
-        "ion_trap": {"retries": 10}
+        "ion_trap": {"retries": 90}
     }
 
     varying_params = {
-        "num_repeaters": [1, 2, 4, 6],
-        "distances": [20, 50, 100],
+        "num_repeaters": [1, 2, 3, 4, 5, 6, 7, 8],
+        "distances": [10, 100],
     }
+    directory = "results/theo_rate"
     sim = TheoRateSimulation(fixed_params=fixed_params,
                              varying_params=varying_params,
-                             parameter_file="../../tutorial/1G_examples/parameters/theo_rate.yml",
-                             output_dir="results",
+                             parameter_file="theo_rate.yml",
+                             output_dir=directory,
                              #logfile="theo_rate.log"
                              )
-    sim.start()
+    final_data = sim.start()
+    data = pandas.DataFrame(final_data)
+    data.to_csv(f"{directory}/theo_rate100.csv", sep=',')

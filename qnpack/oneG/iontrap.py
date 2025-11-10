@@ -34,13 +34,11 @@ log = logging.getLogger(__name__)
 class IonTrapSimulation(Simulation):
     def __init__(self, logfile=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        log.info(f"Configuration:\n{self.cfg}")
-
+        
         setup_logging(name=__name__,
                       level=logging.DEBUG if self.cfg.sim.debug else logging.INFO,
                       logfile=logfile)
-
+        log.info(f"Configuration:\n{self.cfg}")
 
     def plot(self, final_data, x_axis1, y_axis1, xlabel1, ylabel1, label_param1, 
               x_axis2, y_axis2, xlabel2, ylabel2, label_param2,
@@ -93,7 +91,7 @@ class IonTrapSimulation(Simulation):
 
         log.info(f"Running simulation with parameters: {self.varying_params}")
         log.info(f"Fixed parameters: {self.fixed_params}")
-        log.info(f"Iterations: {self.iterations}")
+        log.info(f"Iterations: {self.cfg.sim.iterations}")
 
         # Generate all combinations of varying parameters
         for param_values in itertools.product(*self.varying_params.values()):
@@ -114,7 +112,7 @@ class IonTrapSimulation(Simulation):
             sim_params["node_distance"] = sim_params["distance"] / (total_nodes - 1)
 
             # Set up the network and protocol
-            network_params_init = {key: sim_params[key] for key in sim_params if key not in ["retries", "distance", "proto_sched"]}
+            network_params_init = {key: sim_params[key] for key in sim_params if key not in ["max_emission_retries", "retries", "distance", "proto_sched"]}
             network_param_keys = ['photon_loss', 'init_photon_loss', 'c_lightspeed', 'q_lightspeed', 'node_c_pos', 'coherence_time', 'z_gate_duration', 
                                   'x_gate_duration', 'ms_depolar_prob', 'x_depolar_prob', 'z_depolar_prob', 'measurement_duration', 'emission_duration', 
                                   'collection_efficiency', 'emission_fidelity', 'ms_pi_over_2_duration', 'retry_duration', 'channel_depolar_rate', 
@@ -127,10 +125,10 @@ class IonTrapSimulation(Simulation):
                     return getattr(self.cfg.network, key, None)
                 elif module_name == 'ion_trap':
                     return getattr(self.cfg.ion_trap, key, None)
-                # elif module_name == 'bsm':
-                #     return getattr(self.cfg.bsm, key, None)
                 else:
-                    return self.cfg.bsm.max_emission_retries
+                    return getattr(self.cfg.bsm, key, None)
+                # else:
+                #     return self.cfg.bsm.max_emission_retries
             
             # Separate keys for network_params and those needing self.cfg
             network_params = {key: network_params_init[key] for key in network_params_init}
@@ -153,10 +151,11 @@ class IonTrapSimulation(Simulation):
                         network_params[key] = get_param_value(module_name, key)
             
             # Now you can pass network_params to network_setup
+            log.info(f"Final network params before building network: {network_params}")
             network, bsm_nodes, r_nodes, node_q1, node_q2, _ = self.network_setup(**network_params)
             # only relevant parameters for RepeaterProtocol
             repeater_param_keys = ['node_c_pos', 'z_gate_duration', 'x_gate_duration', 'node_distance',
-                                   "retries", "num_repeaters", "proto_sched"]
+                                   "max_emission_retries", "num_repeaters", "proto_sched"]
             repeater_params_init = {key: sim_params[key] for key in repeater_param_keys if key in sim_params}
             
             repeater_params = {key: repeater_params_init[key] for key in repeater_params_init}
@@ -177,13 +176,18 @@ class IonTrapSimulation(Simulation):
                     # Get the value from the correct module
                     if module_name:
                         repeater_params[key] = get_param_value(module_name, key)
+            log.info(f"Final repeater params before repeater protocol: {repeater_params}")
             protocol = RepeaterProtocol(self.cfg, network, bsm_nodes, r_nodes, **repeater_params)
 
             dc = self.setup_datacollector(node_q1, node_q2, protocol)
             error_count = 0
             # Run trials
-            fidelities, times = [], []
-            for i in range(self.iterations):
+            fidelities, times, success_times, num_retries = [], [], [], []
+            rows_added = False
+            diff = 0
+            for i in range(self.cfg.sim.iterations):
+                log.info(
+                    f"\t  Running iteration {i+1} of [{self.cfg.sim.iterations} total iters]")
                 if not i:
                     try:
                         protocol.start()
@@ -207,61 +211,69 @@ class IonTrapSimulation(Simulation):
                         r_node = network.get_node(r_node_name)
                         r_node.subcomponents['ion_trap_quantum_communication_device'].resample()
                         r_node.subcomponents['ion_trap_quantum_communication_device'].state_initialization(node_name=r_node_name, topo=[0, 1])
-
                 ns.sim_run()
                 try:
-                    # Check if any fidelity values are -1
-                    # check retries here also if needed
-                    if (dc.dataframe['fidelity'] == -1).any():
-                        s_time = (protocol.subprotocols['node_c'].end_time -
-                                  protocol.subprotocols['node_c'].start_time)/1e9
-                        times.append(s_time)
-                        log.info("-1 detected, filtering iteration data")
-                except KeyError:
-                    s_time = (protocol.subprotocols['node_c'].end_time -
-                              protocol.subprotocols['node_c'].start_time)/1e9
+                    if len(dc.dataframe) != diff:
+                        rows_added=True
+                        diff = len(dc.dataframe)
+                    if rows_added:
+                        fid = dc.dataframe.loc[diff-1, 'fidelity']
+                        if fid == -1:
+                            log.info("-1 detected, filtering iteration data")
+                            fidelities.append(-1)
+                        else:
+                            fidelities.append(fid)
+                            retries_itr = protocol.subprotocols['node_c'].retries
+                            avg_retries = round(sum(retries_itr) / len(retries_itr))
+                            if fid > 0.2:
+                                # for retry in retries_itr:
+                                num_retries.append(avg_retries)
+                    s_time = (protocol.subprotocols['node_c'].end_time - protocol.subprotocols['node_c'].start_time)/1e9
+                    times.append(s_time)
+                    success_times.append(s_time)
+                    rows_added=False
+                except KeyError as e:
+                    log.info(f"Key error: {e}")
+                    s_time = (protocol.subprotocols['node_c'].end_time - protocol.subprotocols['node_c'].start_time)/1e9
                     times.append(s_time)
                     error_count += 1
                     if error_count == self.cfg.sim.iterations:
                         # this means that all iterations had errors, so adding the fidelity value only for the last iteration
-                        fidelities.append(0)
-                    log.warning(
-                        f"KeyError: Fidelity column missing, skipping iteration")
+                        fidelities.append(-1)
+                    log.warning(f"KeyError: Fidelity column missing, skipping iteration")
                     continue
-            
+
             try:
                 # Filter out -1 values and append valid fidelities once
-                valid_fidelities = dc.dataframe.loc[dc.dataframe['fidelity']
-                                                    != -1, 'fidelity'].tolist()
+                valid_fidelities = [f for f in fidelities if f != -1]
             except KeyError:
                 log.warning("KeyError: No valid fidelities")
                 valid_fidelities = None
-                rate = 0
+                total_rate = 0
             if valid_fidelities:
-                log.debug(f"Appending valid fidelities: {valid_fidelities}")
-                fidelities.extend(valid_fidelities)
+                log.info(f"Valid fidelities: {valid_fidelities}")
                 log.info(f"\t  Fidelities: {[round(x,2) for x in fidelities]}")
-                total_time = sum(dc.dataframe['time'].to_list())
-                if len(times) != 0:
-                    total_time = total_time + sum(times)
-                num_success = len(valid_fidelities)
-                rate = num_success / total_time
-                log.info(
-                    f"\t  Rate of Entanglement: {round(rate,2)}, with total time: {total_time} and number of success: {num_success}")
-            else:
                 if len(times) != 0:
                     total_time = sum(times)
+                num_success = len(valid_fidelities)
+                rate = num_success / total_time
+                log.info(f"\t  Rate of Entanglement: {round(rate,2)} with total time: {total_time} and number of success: {num_success}")
+            else:
+                if len(times) != 0:
+                    total_time = total_time + sum(times)
                 num_success = 0
-                rate = 0
-                log.info(
-                    f"\t  Rate of Entanglement: {round(rate,2)}, with total time: {total_time} and number of success: {num_success}")
+                total_rate = 0
+                log.info(f"\t  Rate of Entanglement: {round(rate,2)}, with total time: {total_time} and number of success: {num_success}")
             # Store the mean and SEM of fidelities for each configuration
-            if len(fidelities) > 0:
-                mean_fidelity = np.mean(fidelities)
+            if len(valid_fidelities) > 0:
+                true_fidelities = [round(x,2) for x in valid_fidelities]
+                mean_fidelity = np.mean(true_fidelities)
+                mean_time = np.mean(success_times)
+                mean_retries = np.mean(num_retries)
                 log.info(f"\t  Mean Fidelity: {mean_fidelity}")
-                if len(fidelities) > 1:
-                    sem_fidelity = np.std(fidelities, ddof=1) / \
-                        np.sqrt(len(fidelities))
+                if len(valid_fidelities) > 1:
+                    sem_fidelity = np.std(valid_fidelities, ddof=1) / \
+                        np.sqrt(len(valid_fidelities))
                 else:
                     sem_fidelity = 0
             else:
@@ -272,7 +284,9 @@ class IonTrapSimulation(Simulation):
                 **param_dict,  # Store the varying parameters
                 'fidelity': mean_fidelity,
                 'sem': sem_fidelity,
-                'rate': rate
+                'rate': rate,
+                'mean_retries': mean_retries,
+                'num_success': num_success
             })
         return final_data
 
@@ -475,8 +489,8 @@ class IonTrapSimulation(Simulation):
 
             if right_node != last_bsm_node:
                 self.bsm_node_setup(right_node, qport_left_name=f"qport_{right}_{middle}",
-                                    qport_right_name=f"qport_{right}_{next_repeater}")
-                #    coupling_efficiency=coupling_efficiency)
+                                    qport_right_name=f"qport_{right}_{next_repeater}",
+                                    coupling_efficiency=coupling_efficiency)
 
             # add classical channel from all repeater nodes to the control node
             # print(f"Distance between node_c and {middle}", distances[f"{middle}"])
@@ -645,7 +659,7 @@ class IonTrapSimulation(Simulation):
 
         return network, node_bsm_list, node_r_list, node_q1, node_q2, num_repeaters
 
-    def bsm_node_setup(self, node, qport_left_name, qport_right_name, coupling_efficiency=1):
+    def bsm_node_setup(self, node, qport_left_name, qport_right_name, coupling_efficiency):
         # Add Clock to the BSM nodes
         # log.debug(f"{node}, {qport_left_name}, {qport_right_name}")
         clk = Clock("BSMCLK", self.cfg.clock.HZ, max_ticks=self.cfg.clock.max_ticks)
@@ -696,7 +710,6 @@ class IonTrapSimulation(Simulation):
         """
 
         def calc_fidelity(evexpr):
-            log.debug("Entering the calc fidelity func")
             q_a, = node_q1.qmemory.peek(positions=[0])
             q_b, = node_q2.qmemory.peek(positions=[0])
             eigen_state1 = SparseDMRepr(
@@ -729,17 +742,29 @@ if __name__ == "__main__":
         config_file = sys.argv[1]
 
     fixed_params = {
-        "ion_trap": {"coherence_time": 60000000}
+        # "ion_trap": {"coherence_time": 60000000}
+        # "bsm": {"max_emission_retries": 120}
     }
 
     varying_params = {
-        "num_repeaters": [1, 3, 5],
-        "distance": [20, 50, 100],
+        "num_repeaters": [1, 2, 3, 4, 5, 6, 7, 8],
+        "distance": [20, 50, 80],
+        # "init_photon_loss": [0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]
+        # "max_emission_retries": [30, 60, 90, 120]
+        # "photon_loss": [0.3, 0.2, 0.1]
+        # "collection_efficiency": [0.6, 0.7, 0.8, 0.9]
+        # "proto_sched": [1, 3]
+        # "emission_fidelity": [0.96, 0.97, 0.98, 0.99, 1]
+        # "coherence_time": [60000000, 100000000, 150000000, 200000000, 250000000]
+        # "ms_depolar_prob": [0.1, 0.09, 0.08, 0.07, 0.06, 0.05]s
     }
+    directory = "results/rate_fid"
     sim = IonTrapSimulation(fixed_params=fixed_params,
                              varying_params=varying_params,
-                             parameter_file=config_file,
-                             output_dir="results",
-                             #logfile=""
+                             parameter_file="parameters.yml",
+                             output_dir=directory,
+                             # logfile=""
                              )
-    sim.start()
+    final_data = sim.start()
+    data = pandas.DataFrame(final_data)
+    data.to_csv(f"{directory}/rate_fid18.csv", sep=',')
