@@ -1,5 +1,5 @@
 sim:
-  iterations: 15
+  iterations: 1500
   debug: False
 
 clock:

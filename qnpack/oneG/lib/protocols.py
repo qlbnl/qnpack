@@ -10,11 +10,14 @@ from netsquid.protocols.protocol import Signals
 from qnpack.oneG.advanced_ion_trap import AdvRetryEmitProgram
 from qnpack.oneG.lib.programs import CorrectionProgram
 from qnpack.common.utils import calculate_distances
+from qnpack.common.logging import setup_logging
 import re
 
 
 log = logging.getLogger(__name__)
-
+# setup_logging(name=__name__,
+#                       level=logging.DEBUG,
+#                       logfile=None)
 
 BSM_SUCCESS = [[2], [3]]
 
@@ -643,7 +646,7 @@ class ControlProtocol(NodeProtocol):
 
 
 class RepeaterProtocol(LocalProtocol):
-    def __init__(self, cfg, network, bsm_nodes, r_nodes, num_repeaters, retries,
+    def __init__(self, cfg, network, bsm_nodes, r_nodes, num_repeaters, max_emission_retries,
                  z_gate_duration, x_gate_duration, node_distance, proto_sched, node_c_pos):
         """Setup protocols on repeater chain network."""
         super().__init__(nodes=network.nodes)
@@ -653,7 +656,8 @@ class RepeaterProtocol(LocalProtocol):
         self.node_distance = node_distance
         self.z_gate_duration = z_gate_duration
         self.x_gate_duration = x_gate_duration
-        self.retries = retries
+        self.retries = max_emission_retries
+        print(f"RP: self.retries: {self.retries}")
         self.network = network
         self.num_repeaters = num_repeaters
         self.bsm_nodes = bsm_nodes

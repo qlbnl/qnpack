@@ -112,7 +112,7 @@ class IonTrapSimulation(Simulation):
             sim_params["node_distance"] = sim_params["distance"] / (total_nodes - 1)
 
             # Set up the network and protocol
-            network_params_init = {key: sim_params[key] for key in sim_params if key not in ["retries", "distance", "proto_sched"]}
+            network_params_init = {key: sim_params[key] for key in sim_params if key not in ["max_emission_retries", "retries", "distance", "proto_sched"]}
             network_param_keys = ['photon_loss', 'init_photon_loss', 'c_lightspeed', 'q_lightspeed', 'node_c_pos', 'coherence_time', 'z_gate_duration', 
                                   'x_gate_duration', 'ms_depolar_prob', 'x_depolar_prob', 'z_depolar_prob', 'measurement_duration', 'emission_duration', 
                                   'collection_efficiency', 'emission_fidelity', 'ms_pi_over_2_duration', 'retry_duration', 'channel_depolar_rate', 
@@ -125,10 +125,10 @@ class IonTrapSimulation(Simulation):
                     return getattr(self.cfg.network, key, None)
                 elif module_name == 'ion_trap':
                     return getattr(self.cfg.ion_trap, key, None)
-                # elif module_name == 'bsm':
-                #     return getattr(self.cfg.bsm, key, None)
                 else:
-                    return self.cfg.bsm.max_emission_retries
+                    return getattr(self.cfg.bsm, key, None)
+                # else:
+                #     return self.cfg.bsm.max_emission_retries
             
             # Separate keys for network_params and those needing self.cfg
             network_params = {key: network_params_init[key] for key in network_params_init}
@@ -151,10 +151,11 @@ class IonTrapSimulation(Simulation):
                         network_params[key] = get_param_value(module_name, key)
             
             # Now you can pass network_params to network_setup
+            log.info(f"Final network params before building network: {network_params}")
             network, bsm_nodes, r_nodes, node_q1, node_q2, _ = self.network_setup(**network_params)
             # only relevant parameters for RepeaterProtocol
             repeater_param_keys = ['node_c_pos', 'z_gate_duration', 'x_gate_duration', 'node_distance',
-                                   "retries", "num_repeaters", "proto_sched"]
+                                   "max_emission_retries", "num_repeaters", "proto_sched"]
             repeater_params_init = {key: sim_params[key] for key in repeater_param_keys if key in sim_params}
             
             repeater_params = {key: repeater_params_init[key] for key in repeater_params_init}
@@ -175,6 +176,7 @@ class IonTrapSimulation(Simulation):
                     # Get the value from the correct module
                     if module_name:
                         repeater_params[key] = get_param_value(module_name, key)
+            log.info(f"Final repeater params before repeater protocol: {repeater_params}")
             protocol = RepeaterProtocol(self.cfg, network, bsm_nodes, r_nodes, **repeater_params)
 
             dc = self.setup_datacollector(node_q1, node_q2, protocol)
@@ -487,8 +489,8 @@ class IonTrapSimulation(Simulation):
 
             if right_node != last_bsm_node:
                 self.bsm_node_setup(right_node, qport_left_name=f"qport_{right}_{middle}",
-                                    qport_right_name=f"qport_{right}_{next_repeater}")
-                #    coupling_efficiency=coupling_efficiency)
+                                    qport_right_name=f"qport_{right}_{next_repeater}",
+                                    coupling_efficiency=coupling_efficiency)
 
             # add classical channel from all repeater nodes to the control node
             # print(f"Distance between node_c and {middle}", distances[f"{middle}"])
@@ -657,7 +659,7 @@ class IonTrapSimulation(Simulation):
 
         return network, node_bsm_list, node_r_list, node_q1, node_q2, num_repeaters
 
-    def bsm_node_setup(self, node, qport_left_name, qport_right_name, coupling_efficiency=1):
+    def bsm_node_setup(self, node, qport_left_name, qport_right_name, coupling_efficiency):
         # Add Clock to the BSM nodes
         # log.debug(f"{node}, {qport_left_name}, {qport_right_name}")
         clk = Clock("BSMCLK", self.cfg.clock.HZ, max_ticks=self.cfg.clock.max_ticks)
@@ -741,13 +743,22 @@ if __name__ == "__main__":
 
     fixed_params = {
         # "ion_trap": {"coherence_time": 60000000}
+        # "bsm": {"max_emission_retries": 120}
     }
 
     varying_params = {
-        "num_repeaters": [1, 2], #, 2, 3, 4, 5, 6, 7, 8],
-        "distance": [20] #, 50, 80],
+        "num_repeaters": [1, 2, 3, 4, 5, 6, 7, 8],
+        "distance": [20, 50, 80],
+        # "init_photon_loss": [0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]
+        # "max_emission_retries": [30, 60, 90, 120]
+        # "photon_loss": [0.3, 0.2, 0.1]
+        # "collection_efficiency": [0.6, 0.7, 0.8, 0.9]
+        # "proto_sched": [1, 3]
+        # "emission_fidelity": [0.96, 0.97, 0.98, 0.99, 1]
+        # "coherence_time": [60000000, 100000000, 150000000, 200000000, 250000000]
+        # "ms_depolar_prob": [0.1, 0.09, 0.08, 0.07, 0.06, 0.05]s
     }
-    directory = "results/rate"
+    directory = "results/rate_fid"
     sim = IonTrapSimulation(fixed_params=fixed_params,
                              varying_params=varying_params,
                              parameter_file="parameters.yml",
@@ -756,4 +767,4 @@ if __name__ == "__main__":
                              )
     final_data = sim.start()
     data = pandas.DataFrame(final_data)
-    data.to_csv(f"{directory}/rate_fid21.csv", sep=',')
+    data.to_csv(f"{directory}/rate_fid18.csv", sep=',')

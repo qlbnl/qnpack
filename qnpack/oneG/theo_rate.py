@@ -381,14 +381,15 @@ if __name__ == "__main__":
 
     varying_params = {
         "num_repeaters": [1, 2, 3, 4, 5, 6, 7, 8],
-        "distances": [20, 50, 80],
+        "distances": [10, 100],
     }
+    directory = "results/theo_rate"
     sim = TheoRateSimulation(fixed_params=fixed_params,
                              varying_params=varying_params,
                              parameter_file="theo_rate.yml",
-                             output_dir="results/rate",
+                             output_dir=directory,
                              #logfile="theo_rate.log"
                              )
     final_data = sim.start()
     data = pandas.DataFrame(final_data)
-    data.to_csv(f"{self.output_dir}/theo_rate.csv", sep=',')
+    data.to_csv(f"{directory}/theo_rate100.csv", sep=',')
