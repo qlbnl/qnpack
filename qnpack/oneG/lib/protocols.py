@@ -10,10 +10,14 @@ from netsquid.protocols.protocol import Signals
 from qnpack.oneG.advanced_ion_trap import AdvRetryEmitProgram
 from qnpack.oneG.lib.programs import CorrectionProgram
 from qnpack.common.utils import calculate_distances
+from qnpack.common.logging import setup_logging
+import re
 
 
 log = logging.getLogger(__name__)
-
+# setup_logging(name=__name__,
+#                       level=logging.DEBUG,
+#                       logfile=None)
 
 BSM_SUCCESS = [[2], [3]]
 
@@ -157,12 +161,12 @@ class PhotonEmissionProtocol(NodeProtocol):
                     self.ion_trap.spin_echo(spin_echo_sim_time=self.cfg.ion_trap.spin_echo_sim_time)
                     self.ion_trap.spin_echo(spin_echo_sim_time=self.cfg.ion_trap.spin_echo_sim_time)
                     yield self.await_timer(duration=3*self.cfg.ion_trap.spin_echo_sim_time*1e3)
-                self.ion_trap.state_initialization(
-                    node_name=self.node.name)
+                if self.retries != 0:
+                    self.ion_trap.state_initialization(node_name=self.node.name)
                 self.node.qmemory.execute_program(
                     AdvRetryEmitProgram(), qubit_mapping=[0, 1])
                 yield self.await_program(self.node.qmemory)
-
+                log.debug(f"Matter qubit state in {self.node.name} after emission, {self.node.qmemory.peek(positions=[0])[0].qstate.qrepr} {ns.sim_time()}")
                 # Wait for BSM result
                 yield self.await_port_input(self.res_port)
                 res = self.res_port.rx_input()
@@ -207,9 +211,12 @@ class BSMProtocol(NodeProtocol):
             max_distance = max(distances.values())
             trigger_travel_time = (max_distance/self.cfg.network.q_lightspeed)*1e9
             if retries == 0:
-                wait_duration = self.cfg.ion_trap.emission_duration
-                yield self.await_timer(duration=self.cfg.ion_trap.emission_duration)
-                yield self.await_timer(duration=trigger_travel_time)
+                match = re.search(r"(\d+)$", self.node.name)
+                if match:
+                    node_num = int(match.group(1))
+                if node_num % 2 != 0:
+                    yield self.await_timer(duration=self.cfg.ion_trap.emission_duration)
+                    yield self.await_timer(duration=trigger_travel_time)
             if self.clk.is_running is not True:
                 self.clk.start()
             log.debug(
@@ -391,13 +398,14 @@ class RepeaterEmissionProtocol(NodeProtocol):
                     self.ion_trap.spin_echo(spin_echo_sim_time=self.cfg.ion_trap.spin_echo_sim_time)
                     self.ion_trap.spin_echo(spin_echo_sim_time=self.cfg.ion_trap.spin_echo_sim_time)
                     yield self.await_timer(duration=3*self.cfg.ion_trap.spin_echo_sim_time*1e3)
-                self.ion_trap.state_initialization(
-                    node_name=self.node.name, topo=[emission_map[0]])
+                if retries != 0:
+                    self.ion_trap.state_initialization(
+                        node_name=self.node.name, topo=[emission_map[0]])
                 self.node.qmemory.execute_program(
                     AdvRetryEmitProgram(), qubit_mapping=[emission_map[0], 2])
                 yield self.await_program(self.node.qmemory)
-                # log.debug(
-                #     f"Matter qubit state in {self.node.name} after emission, {self.node.qmemory.peek(positions=emission_map[0])[0].qstate.qrepr} {ns.sim_time()}")
+                log.debug(
+                    f"Matter qubit state in {self.node.name} after emission, {self.node.qmemory.peek(positions=emission_map[0])[0].qstate.qrepr} {ns.sim_time()}")
 
                 # Wait on BSM result
                 yield self.await_port_input(res_port)
@@ -449,6 +457,7 @@ class ControlProtocol(NodeProtocol):
         self.bsm_results = dict()
         self.end_result = list()
         self.repeater_results = list()
+        self.retries = list()
         self.both_ends_proto_flag = False
         self.single_bsm_proto_flag = False
         self.shared_repeater_proto_flag = False
@@ -481,6 +490,7 @@ class ControlProtocol(NodeProtocol):
             yield ev_expr
             rport = ev_expr.triggered_events[0].source
             res = rport.rx_input()
+            self.retries.append(res.items[0].retries)
             self.bsm_results[res.items[0].node] = res.items
             waiting -= 1
 
@@ -565,6 +575,7 @@ class ControlProtocol(NodeProtocol):
         self.bsm_results = dict()
         self.repeater_results = list()
         self.end_result = list()
+        self.retries = list()
         self.single_bsm_proto_flag = False
         self.both_ends_proto_flag = False
         self.shared_repeater_proto_flag = False
@@ -635,7 +646,7 @@ class ControlProtocol(NodeProtocol):
 
 
 class RepeaterProtocol(LocalProtocol):
-    def __init__(self, cfg, network, bsm_nodes, r_nodes, num_repeaters, retries,
+    def __init__(self, cfg, network, bsm_nodes, r_nodes, num_repeaters, max_emission_retries,
                  z_gate_duration, x_gate_duration, node_distance, proto_sched, node_c_pos):
         """Setup protocols on repeater chain network."""
         super().__init__(nodes=network.nodes)
@@ -645,7 +656,8 @@ class RepeaterProtocol(LocalProtocol):
         self.node_distance = node_distance
         self.z_gate_duration = z_gate_duration
         self.x_gate_duration = x_gate_duration
-        self.retries = retries
+        self.retries = max_emission_retries
+        print(f"RP: self.retries: {self.retries}")
         self.network = network
         self.num_repeaters = num_repeaters
         self.bsm_nodes = bsm_nodes

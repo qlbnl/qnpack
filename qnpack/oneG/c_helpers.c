@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 void generate_s_values_P (
     int retries,
@@ -91,7 +92,7 @@ int compute_P_c(
 
 double compute_repeater_rate(
     int retries, int num_repeaters,
-    double P_L, double P_R,
+    double P_L, double P_R, double P_base,
     double channel_loss, double ctrl_time, double T_retry,
     double BSM_time, double DBSM_time,
     double spin_echo_time, double init_time,
@@ -100,6 +101,10 @@ double compute_repeater_rate(
     int* max_svalues, int* max_svalues_R
 ) {
     double T_avg = 0.0;
+    double T_avg1 = 0.0;
+    double T_avg2 = 0.0;
+    double T_avg3 = 0.0;
+    double P_success=pow((1-pow((1-P_base),retries+1)),num_repeaters+1);
 
     for (int i = 0; i < len_PL; i++) {
         int max_s_L = max_svalues[i];
@@ -107,28 +112,30 @@ double compute_repeater_rate(
             int max_s_R = max_svalues_R[j];
 
             double total_retry_time = T_retry * (max_s_L + max_s_R);
-            double spin_echo_cost = ((max_s_L / 5) + (max_s_R / 5)) * spin_echo_time;
-
-            T_avg += PL[i] * PR[j] * (
+            double spin_echo_cost = ((int)(max_s_L / 5) + (int)(max_s_R / 5)) * spin_echo_time;
+            
+            T_avg1 += PL[i] * PR[j] * (
                 total_retry_time + 2 * BSM_time + DBSM_time + 4 * ctrl_time + spin_echo_cost
                 );
         }
     }
 
-    T_avg += (1.0 - P_L) * ((T_retry * (retries + 1)) + ((retries + 1.0 / 5.0) * spin_echo_time));
+    T_avg2 = (1.0 - P_L) * ((T_retry * (retries + 1)) + ((int)((retries + 1.0) / 5.0) * spin_echo_time)); //changed from (retries + 1.0 / 5.0)
 
     for (int i = 0; i < len_PL; i++) {
         int max_s_L = max_svalues[i];
-        T_avg += PL[i] * (1.0 - P_R) * (
-            T_retry * (max_s_L + retries + 1)
-            + DBSM_time
-            + ((retries + 1.0 / 5.0) * spin_echo_time)
+        T_avg3 += PL[i] * (1.0 - P_R) * (
+            T_retry * (max_s_L + retries + 1) // BSM_time also need to multiply with number of attemtps
+            + ((int)(max_s_L/5) + (int)((retries + 1.0) / 5)) * spin_echo_time //changed from (retries + 1.0/ 5.0)
             + 2 * ctrl_time
+            + BSM_time
             );
     }
-
+    T_avg +=T_avg1+T_avg2+T_avg3;
     T_avg += init_time + 4.5 * ctrl_time;
-
+    T_avg *=1/P_success;
+    
+    //printf("T_avg1 %.8f T_avg2 %.8f T_avg3 %.8f T_avg %.8f init_time %.8f ctrl_time %.8f rate %.8f P_success %.8f",T_avg1,T_avg2,T_avg3,T_avg,init_time,ctrl_time,1/T_avg*P_success,P_success);
     return T_avg != 0 ? 1.0 / T_avg : 0.0;
 }
 
