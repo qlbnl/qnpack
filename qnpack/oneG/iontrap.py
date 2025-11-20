@@ -747,18 +747,18 @@ if __name__ == "__main__":
     }
 
     varying_params = {
-        "num_repeaters": [1, 2, 3, 4, 5, 6, 7, 8],
-        "distance": [20, 50, 80],
+        "num_repeaters": [1, 4, 8],
+        "distance": [50],
         # "init_photon_loss": [0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]
         # "max_emission_retries": [30, 60, 90, 120]
         # "photon_loss": [0.3, 0.2, 0.1]
         # "collection_efficiency": [0.6, 0.7, 0.8, 0.9]
         # "proto_sched": [1, 3]
         # "emission_fidelity": [0.96, 0.97, 0.98, 0.99, 1]
-        # "coherence_time": [60000000, 100000000, 150000000, 200000000, 250000000]
-        # "ms_depolar_prob": [0.1, 0.09, 0.08, 0.07, 0.06, 0.05]s
+        "coherence_time": [60000000, 100000000, 150000000, 200000000, 250000000]
+        # "ms_depolar_prob": [0.1, 0.09, 0.08, 0.07, 0.06, 0.05]
     }
-    directory = "results/rate_fid"
+    directory = "results/fidelity"
     sim = IonTrapSimulation(fixed_params=fixed_params,
                              varying_params=varying_params,
                              parameter_file="parameters.yml",
@@ -767,4 +767,4 @@ if __name__ == "__main__":
                              )
     final_data = sim.start()
     data = pandas.DataFrame(final_data)
-    data.to_csv(f"{directory}/rate_fid18.csv", sep=',')
+    data.to_csv(f"{directory}/ct9.csv", sep=',')
