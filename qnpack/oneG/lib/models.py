@@ -4,10 +4,14 @@ from netsquid.components.qdetector import GatedQuantumDetector
 from netsquid.qubits.qubitapi import gmeasure, discard
 from netsquid.qubits import operators as ops
 from qnpack.oneG.lib.operators import create_meas_ops
-
+from qnpack.common.logging import setup_logging
 
 log = logging.getLogger(__name__)
 
+
+# setup_logging(name=__name__,
+#                       level=logging.DEBUG,
+#                       logfile=None)
 
 class BSMGatedQuantumDetector(GatedQuantumDetector):
     """BSM detector for 1G repeater chain with added flexible coupling efficiency
@@ -22,10 +26,10 @@ class BSMGatedQuantumDetector(GatedQuantumDetector):
         self.qin0_new_photon = False
         self.qin1_new_photon = False
         self.coupling_efficiency = coupling_efficiency  # Store coupling efficiency
+        log.debug(f"Coupling efficiency: {self.coupling_efficiency}")
         super().__init__(name, detection_window, num_input_ports, num_output_ports,
                          observable, meas_operators, system_delay, dead_time,
                          models, output_meta, error_on_fail, properties)
-        log.debug("Overriding measure function in init")
 
     def measure(self):
         self.qin0_new_photon = False
@@ -60,5 +64,5 @@ class BSMGatedQuantumDetector(GatedQuantumDetector):
         """Returns True if the photon is successfully detected based on coupling efficiency."""
         detected = random.random() < self.coupling_efficiency
         if not detected:
-            log.debug("Photon is not detected by the detector")
+            log.debug(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Photon is not detected by the detector")
         return detected

@@ -53,7 +53,7 @@ class TheoRateSimulation(Simulation):
         # Set argument and return types
         self._c_lib.compute_repeater_rate.argtypes = [
             ctypes.c_int, ctypes.c_int,
-            ctypes.c_double, ctypes.c_double,
+            ctypes.c_double, ctypes.c_double, ctypes.c_double,
             ctypes.c_double, ctypes.c_double, ctypes.c_double,
             ctypes.c_double, ctypes.c_double,
             ctypes.c_double, ctypes.c_double,
@@ -131,7 +131,6 @@ class TheoRateSimulation(Simulation):
             + (col_eff * (1 - QFC_loss) * channel_loss)
             + (col_eff * (1 - QFC_loss) * (1 - channel_loss) * coupling_bsm_loss)
         )
-
         P = ((1 - total_photon_loss) ** 2) / 2
         return P
 
@@ -196,7 +195,7 @@ class TheoRateSimulation(Simulation):
 
     def compute_P_L_c(self, retries, num_repeaters, channel_loss):
         P_base = self.compute_per_attempt_success(channel_loss)
-        num_bsm_nodes = self.num_odd_bsm(num_repeaters) + 1
+        num_bsm_nodes = self.num_odd_bsm(num_repeaters) 
         num_combinations = int((retries + 1) ** num_bsm_nodes)
 
         # Allocate memory
@@ -216,13 +215,12 @@ class TheoRateSimulation(Simulation):
             num_bsm_nodes,
             P_base,
             PL.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
-            max_svalues.ctypes.data_as(ctypes.POINTER(ctypes.c_int))
+            max_svalues.ctypes.data_as(ctypes.POINTER(ctypes.c_int))  ##I think PL and max_svalues will be updated inside compute_P_c
         )
 
         # Store results
         self._PL = PL.tolist()
         self._max_svalues = max_svalues.tolist()
-
         return sum(self._PL)
 
     # def compute_P_R(self, retries, num_repeaters, channel_loss):
@@ -241,7 +239,7 @@ class TheoRateSimulation(Simulation):
     #     return P_R
 
     def compute_P_R_c(self, retries, num_repeaters, channel_loss):
-        num_bsm_nodes = self.num_even_bsm(num_repeaters) + 1
+        num_bsm_nodes = self.num_even_bsm(num_repeaters) 
         num_combinations = (retries + 1) ** num_bsm_nodes
 
         PR = np.zeros(num_combinations, dtype=np.float64)
@@ -306,11 +304,12 @@ class TheoRateSimulation(Simulation):
         PR = np.ascontiguousarray(self._PR, dtype=np.float64)
         max_svalues = np.ascontiguousarray(self._max_svalues, dtype=np.int32)
         max_svalues_R = np.ascontiguousarray(self._max_svalues_R, dtype=np.int32)
+        P_base = self.compute_per_attempt_success(channel_loss)
 
         return self._c_lib.compute_repeater_rate(
             retries,
             num_repeaters,
-            P_L, P_R,
+            P_L, P_R, P_base,
             channel_loss, ctrl_time, T_retry,
             self._BSM_time, self._DBSM_time,
             self._spin_echo_time, self._init_time,
@@ -345,14 +344,14 @@ class TheoRateSimulation(Simulation):
 
             node_distance = self.calc_node_dist(num_repeaters, distance)
             dist = calculate_distances(self._node_pos, num_repeaters, node_distance)
-            channel_loss = 1 - (1 - self._QFC_loss) * np.power(10, - node_distance * self._init_loss / 10)
+            channel_loss = 1 - np.power(10, - node_distance * self._init_loss / 10)
             max_value = max(dist.values())
             ctrl_time = max_value / 200000
             T_retry = 2 * (node_distance / 200000) + self._retry_time
             P_L_value = self.compute_P_L_c(self._retries, num_repeaters, channel_loss)
             P_R_value = self.compute_P_R_c(self._retries, num_repeaters, channel_loss)
-            # print(P_L_value)
-            # print(P_R_value)
+            #print("P_L_value",P_L_value)
+            #print("P_R_value",P_R_value)
             # print(self._max_svalues)
             # print(self._max_svalues_R)
             # print(self._PL)
@@ -368,7 +367,6 @@ class TheoRateSimulation(Simulation):
     def finalize(self):
         pass
 
-
 if __name__ == "__main__":
     import sys
     config_file = Constants.DEFAULT_PARAM_FILE
@@ -376,17 +374,22 @@ if __name__ == "__main__":
         config_file = sys.argv[1]
 
     fixed_params = {
-        "ion_trap": {"retries": 10}
+        "ion_trap": {"retries": 90}
     }
 
     varying_params = {
-        "num_repeaters": [1, 2, 4, 6],
-        "distances": [20, 50, 100],
+        #"num_repeaters": [1, 2, 3, 4, 5, 6, 7, 8],
+        #"distances": [20, 50, 80],
+        "num_repeaters": [1,2,3],
+        "distances": [20,50,80],
     }
+    directory = "results/theo_rate"
     sim = TheoRateSimulation(fixed_params=fixed_params,
                              varying_params=varying_params,
-                             parameter_file="../../tutorial/1G_examples/parameters/theo_rate.yml",
-                             output_dir="results",
+                             parameter_file="theo_rate.yml",
+                             output_dir=directory,
                              #logfile="theo_rate.log"
                              )
-    sim.start()
+    final_data = sim.start()
+    data = pandas.DataFrame(final_data)
+    data.to_csv(f"{directory}/theo_rate.csv", sep=',')

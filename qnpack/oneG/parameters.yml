@@ -1,6 +1,6 @@
 sim:
   iterations: 10
-  debug: false
+  debug: False
 
 clock:
   HZ: 1000000  # 1 MHz
@@ -8,11 +8,11 @@ clock:
 
 bsm:
   detection_window: 4320000.0  # ns  # find optimal value
-  max_emission_retries: 30
+  max_emission_retries: 90
   detector_wait_factor: 1.05
   system_delay: 0
   timeout: 40
-  coupling_efficiency: 1 #0.75
+  coupling_efficiency: 1 #0.9 
 
 ion_trap:
   noise_model: 0  # 0 for noiseless, 1 for noisy
@@ -39,20 +39,20 @@ ion_trap:
   emission_duration: 7220000 #ns
   retry_duration: 75000 #ns
 
-  collection_efficiency: 1 #0.52 # affects rate
-  emission_fidelity: 1 #affects fidelity
-  coherence_time: 0 # ns affects fidelity
+  collection_efficiency: 1 #0.69 # affects rate
+  emission_fidelity: 1 #0.96 #affects fidelity
+  coherence_time: 0 #60000000 # ns affects fidelity
   init_depolar_prob: 0
-  ms_depolar_prob: 0.0 #affects fidelity
-  z_depolar_prob: 0.000 #affects fidelity, probability that qubit will depolarize after gate 
-  x_depolar_prob: 0.000 #affects fidelity
+  ms_depolar_prob: 0 #0.01 #affects fidelity
+  z_depolar_prob: 0 #0.001 #affects fidelity, probability that qubit will depolarize after gate 
+  x_depolar_prob: 0 #0.001 #affects fidelity
   gs_prob: 1
 
 network:
   c_lightspeed: 200000
   q_lightspeed: 200000  # Fixed speed of photons through the channel [km/s]
-  photon_loss: 0.0 # affects rate
-  init_photon_loss: 0.0 #0.45 # due to QFC # affects rate
+  photon_loss: 0 #0.2 # affects rate
+  init_photon_loss: 0 #0.7 #0.45 # due to QFC # affects rate
   node_c_pos: 0
   channel_depolar_rate: 0.0 #affects fidelity # probability that the qchannel will depolarize
   proto_sched: 1 #1 is best, 2 is good, 3 is worst

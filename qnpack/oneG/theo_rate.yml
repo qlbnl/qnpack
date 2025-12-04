@@ -1,0 +1,18 @@
+sim:
+    debug: false
+ion_trap:
+    retries: 90  # Number of entanglement attempts
+    retry_time: 0.000175
+    init_time: 0.00722
+    DBSM_time: 0.000119
+    BSM_time: 0.000005
+    spin_echo_time: 0.000036 # applied after 5 retries
+
+
+network:
+    col_eff: 0.69 #0.52  # Example collection efficiency
+    QFC_loss: 0.7 #0.45  # Example Quantum Frequency Conversion (QFC) loss
+    channel_loss: 0.3  # Example channel loss
+    coupling_bsm_loss: 0.1  # Example BSM coupling loss
+    node_pos: 0
+    init_loss: 0.2
