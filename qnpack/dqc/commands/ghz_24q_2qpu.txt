@@ -1,0 +1,109 @@
+GHZ State: 24 qubits, 2 QPUs
+QPU 0: qubits 0-11 (12 qubits)
+QPU 1: qubits 12-23 (12 qubits)
+Cut edges: 1 (between qubit 11 and 12)
+============================================================
+Total commands: 97
+Local gates: 94
+Remote gates: 1
+Starting processes: 1
+Ending processes: 1
+============================================================
+
+Rz(3) server_0[0];
+Rz(3) server_0[1];
+Rz(3) server_0[2];
+Rz(3) server_0[3];
+Rz(3) server_0[4];
+Rz(3) server_0[5];
+Rz(3) server_0[6];
+Rz(3) server_0[7];
+Rz(3) server_0[8];
+Rz(3) server_0[9];
+Rz(3) server_0[10];
+Rz(3) server_0[11];
+Rz(3) server_0[12];
+H server_1[0];
+Rz(3) server_1[1];
+Rz(3) server_1[2];
+Rz(3) server_1[3];
+Rz(3) server_1[4];
+Rz(3) server_1[5];
+Rz(3) server_1[6];
+Rz(3) server_1[7];
+Rz(3) server_1[8];
+Rz(3) server_1[9];
+Rz(3) server_1[10];
+H server_0[0];
+H server_0[1];
+H server_0[2];
+H server_0[3];
+H server_0[4];
+H server_0[5];
+H server_0[6];
+H server_0[7];
+H server_0[8];
+H server_0[9];
+H server_0[10];
+H server_0[11];
+H server_0[12];
+Rz(1) server_1[0];
+H server_1[1];
+H server_1[2];
+H server_1[3];
+H server_1[4];
+H server_1[5];
+H server_1[6];
+H server_1[7];
+H server_1[8];
+H server_1[9];
+H server_1[10];
+CU1(1) server_1[1], server_1[0];
+H server_1[1];
+CU1(1) server_1[2], server_1[1];
+H server_1[2];
+CU1(1) server_1[3], server_1[2];
+H server_1[3];
+CU1(1) server_1[4], server_1[3];
+H server_1[4];
+CU1(1) server_1[5], server_1[4];
+H server_1[5];
+CU1(1) server_1[6], server_1[5];
+H server_1[6];
+CU1(1) server_1[7], server_1[6];
+H server_1[7];
+CU1(1) server_1[8], server_1[7];
+H server_1[8];
+CU1(1) server_1[9], server_1[8];
+H server_1[9];
+CU1(1) server_1[10], server_1[9];
+H server_1[10];
+starting_process server_1[10], server_0_link_register[0];
+CU1(1) server_0[0], server_0_link_register[0];
+H server_0[0];
+ending_process server_0_link_register[0], server_1[10];
+CU1(1) server_0[1], server_0[0];
+H server_0[1];
+CU1(1) server_0[2], server_0[1];
+H server_0[2];
+CU1(1) server_0[3], server_0[2];
+H server_0[3];
+CU1(1) server_0[4], server_0[3];
+H server_0[4];
+CU1(1) server_0[5], server_0[4];
+H server_0[5];
+CU1(1) server_0[6], server_0[5];
+H server_0[6];
+CU1(1) server_0[7], server_0[6];
+H server_0[7];
+CU1(1) server_0[8], server_0[7];
+H server_0[8];
+CU1(1) server_0[9], server_0[8];
+H server_0[9];
+CU1(1) server_0[10], server_0[9];
+H server_0[10];
+CU1(1) server_0[11], server_0[10];
+H server_0[11];
+CU1(1) server_0[12], server_0[11];
+H server_0[12];
+Rz(3) server_0[12];

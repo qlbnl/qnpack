@@ -1,0 +1,3623 @@
+[
+  {
+    "num_nodes": 6,
+    "num_qubits": 120,
+    "num_channels": 48,
+    "nodes": [
+      {
+        "size": 20,
+        "title": "BSM-CA",
+        "group": 1,
+        "label": "BSM-CA",
+        "shape": "circle",
+        "nu_q": 0,
+        "nu_c": 6,
+        "systemSettings": {
+          "mode": "daemon",
+          "threads": 5,
+          "workers": 5,
+          "type": "BSMNode",
+          "name": "bsm-CA.lbl.gov",
+          "ID": "BSM-CA",
+          "controlInterface": "10.0.0.22"
+        },
+        "quantumSettings": {
+          "bellStates": [
+            "∣Φ+⟩",
+            "∣Φ−⟩",
+            "∣Ψ+⟩",
+            "∣Ψ−⟩"
+          ],
+          "measurementRate": 1000,
+          "qubitEncoding": "polarization",
+          "detectorSettings": [
+            {
+              "name": "detector_1",
+              "efficiency": "0.99",
+              "darkCount": "1",
+              "countRate": {
+                "value": 1000,
+                "unit": "Hz"
+              },
+              "timeResolution": {
+                "value": 100,
+                "unit": "ns"
+              }
+            },
+            {
+              "name": "detector_2",
+              "efficiency": "0.99",
+              "darkCount": "1",
+              "countRate": {
+                "value": 1000,
+                "unit": "Hz"
+              },
+              "timeResolution": {
+                "value": 100,
+                "unit": "ns"
+              }
+            }
+          ]
+        },
+        "channels": [
+          {
+            "ID": "1",
+            "name": "from_LBNL-C",
+            "type": "quantum",
+            "direction": "in",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": -3,
+            "neighbor": {
+              "systemRef": "LBNL-C",
+              "channelRef": "6",
+              "type": "QNode"
+            }
+          },
+          {
+            "ID": "2",
+            "name": "from_LBNL-A",
+            "type": "quantum",
+            "direction": "in",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": -3,
+            "neighbor": {
+              "systemRef": "LBNL-A",
+              "channelRef": "6",
+              "type": "QNode"
+            }
+          },
+          {
+            "ID": "3",
+            "name": "result_to_C",
+            "type": "classic_bsm_result",
+            "direction": "out",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-C",
+              "channelRef": "8",
+              "type": "QNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "4",
+            "name": "result_to_A",
+            "type": "classic_bsm_result",
+            "direction": "out",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-A",
+              "channelRef": "8",
+              "type": "QNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "5",
+            "name": "clk_to_C",
+            "type": "classic_clk",
+            "direction": "out",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-C",
+              "channelRef": "10",
+              "type": "QNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "6",
+            "name": "clk_to_A",
+            "type": "classic_clk",
+            "direction": "out",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-A",
+              "channelRef": "10",
+              "type": "QNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          }
+        ],
+        "id": "BSM-CA"
+      },
+      {
+        "size": 20,
+        "title": "LBNL-A",
+        "group": 1,
+        "label": "LBNL-A",
+        "shape": "circle",
+        "nu_q": 40,
+        "nu_c": 10,
+        "systemSettings": {
+          "mode": "daemon",
+          "threads": 3,
+          "workers": 3,
+          "type": "QNode",
+          "name": "q-node-A.lbl.gov",
+          "ID": "LBNL-A",
+          "controlInterface": "10.0.0.10"
+        },
+        "qubitSettings": {
+          "qubits": [
+            {
+              "ID": "1",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "2",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "3",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "4",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "5",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "6",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "7",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "8",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "9",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "10",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "11",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "12",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "13",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "14",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "15",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "16",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "17",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "18",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "19",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "20",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "21",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "22",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "23",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "24",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "25",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "26",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "27",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "28",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "29",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "30",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "31",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "32",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "33",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "34",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "35",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "36",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "37",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "38",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "39",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "40",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            }
+          ],
+          "operations": {
+            "oneQubitGates": [
+              {
+                "gate": "rot_x",
+                "qubits": [
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6",
+                  "7",
+                  "8",
+                  "9",
+                  "10",
+                  "11",
+                  "12",
+                  "13",
+                  "14",
+                  "15",
+                  "16",
+                  "17",
+                  "18",
+                  "19",
+                  "20",
+                  "21",
+                  "22",
+                  "23",
+                  "24",
+                  "25",
+                  "26",
+                  "27",
+                  "28",
+                  "29",
+                  "30",
+                  "31",
+                  "32",
+                  "33",
+                  "34",
+                  "35",
+                  "36",
+                  "37",
+                  "38",
+                  "39",
+                  "40"
+                ]
+              }
+            ],
+            "twoQubitGates": [
+              {
+                "gate": "cnot",
+                "qubits": [
+                  [
+                    "1",
+                    "21"
+                  ],
+                  [
+                    "2",
+                    "22"
+                  ],
+                  [
+                    "3",
+                    "23"
+                  ],
+                  [
+                    "4",
+                    "24"
+                  ],
+                  [
+                    "5",
+                    "25"
+                  ],
+                  [
+                    "6",
+                    "26"
+                  ],
+                  [
+                    "7",
+                    "27"
+                  ],
+                  [
+                    "8",
+                    "28"
+                  ],
+                  [
+                    "9",
+                    "29"
+                  ],
+                  [
+                    "10",
+                    "30"
+                  ],
+                  [
+                    "11",
+                    "31"
+                  ],
+                  [
+                    "12",
+                    "32"
+                  ],
+                  [
+                    "13",
+                    "33"
+                  ],
+                  [
+                    "14",
+                    "34"
+                  ],
+                  [
+                    "15",
+                    "35"
+                  ],
+                  [
+                    "16",
+                    "36"
+                  ],
+                  [
+                    "17",
+                    "37"
+                  ],
+                  [
+                    "18",
+                    "38"
+                  ],
+                  [
+                    "19",
+                    "39"
+                  ],
+                  [
+                    "20",
+                    "40"
+                  ]
+                ]
+              }
+            ]
+          }
+        },
+        "matterLightInterfaceSettings": [
+          {
+            "ID": "1",
+            "name": "Interface 1",
+            "entanglement": {
+              "rate": {
+                "value": 1000,
+                "unit": "Hz"
+              },
+              "type": "∣Φ+⟩"
+            },
+            "flyingQubit": {
+              "type": "polarization",
+              "wavelength": {
+                "value": 1550,
+                "unit": "nm"
+              }
+            }
+          }
+        ],
+        "channels": [
+          {
+            "ID": "1",
+            "name": "to_B",
+            "type": "classic_clk",
+            "direction": "out",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": 10,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-B",
+              "channelRef": "2",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "2",
+            "name": "from_B",
+            "type": "classic_clk",
+            "direction": "in",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": 10,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-B",
+              "channelRef": "1",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "3",
+            "name": "to_C",
+            "type": "classic_clk",
+            "direction": "out",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": 10,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-C",
+              "channelRef": "2",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "4",
+            "name": "from_C",
+            "type": "classic_clk",
+            "direction": "in",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": 10,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-C",
+              "channelRef": "1",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "5",
+            "name": "to_BSM-AB",
+            "type": "quantum",
+            "direction": "out",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": -3,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "BSM-AB",
+              "channelRef": "1",
+              "type": "BSMNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "6",
+            "name": "to_BSM-CA",
+            "type": "quantum",
+            "direction": "out",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": -3,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "BSM-CA",
+              "channelRef": "2",
+              "type": "BSMNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "7",
+            "name": "result_from_BSM-AB",
+            "type": "classic_bsm_result",
+            "direction": "in",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "BSM-AB",
+              "channelRef": "3",
+              "type": "BSMNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "8",
+            "name": "result_from_BSM-CA",
+            "type": "classic_bsm_result",
+            "direction": "in",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "BSM-CA",
+              "channelRef": "4",
+              "type": "BSMNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "9",
+            "name": "clk_from_BSM-AB",
+            "type": "classic_clk",
+            "direction": "in",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "BSM-AB",
+              "channelRef": "5",
+              "type": "BSMNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "10",
+            "name": "clk_from_BSM-CA",
+            "type": "classic_clk",
+            "direction": "in",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "BSM-CA",
+              "channelRef": "6",
+              "type": "BSMNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          }
+        ],
+        "id": "LBNL-A"
+      },
+      {
+        "size": 20,
+        "title": "BSM-BC",
+        "group": 1,
+        "label": "BSM-BC",
+        "shape": "circle",
+        "nu_q": 0,
+        "nu_c": 6,
+        "systemSettings": {
+          "mode": "daemon",
+          "threads": 5,
+          "workers": 5,
+          "type": "BSMNode",
+          "name": "bsm-BC.lbl.gov",
+          "ID": "BSM-BC",
+          "controlInterface": "10.0.0.21"
+        },
+        "quantumSettings": {
+          "bellStates": [
+            "∣Φ+⟩",
+            "∣Φ−⟩",
+            "∣Ψ+⟩",
+            "∣Ψ−⟩"
+          ],
+          "measurementRate": 1000,
+          "qubitEncoding": "polarization",
+          "detectorSettings": [
+            {
+              "name": "detector_1",
+              "efficiency": "0.99",
+              "darkCount": "1",
+              "countRate": {
+                "value": 1000,
+                "unit": "Hz"
+              },
+              "timeResolution": {
+                "value": 100,
+                "unit": "ns"
+              }
+            },
+            {
+              "name": "detector_2",
+              "efficiency": "0.99",
+              "darkCount": "1",
+              "countRate": {
+                "value": 1000,
+                "unit": "Hz"
+              },
+              "timeResolution": {
+                "value": 100,
+                "unit": "ns"
+              }
+            }
+          ]
+        },
+        "channels": [
+          {
+            "ID": "1",
+            "name": "from_LBNL-B",
+            "type": "quantum",
+            "direction": "in",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": -3,
+            "neighbor": {
+              "systemRef": "LBNL-B",
+              "channelRef": "6",
+              "type": "QNode"
+            }
+          },
+          {
+            "ID": "2",
+            "name": "from_LBNL-C",
+            "type": "quantum",
+            "direction": "in",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": -3,
+            "neighbor": {
+              "systemRef": "LBNL-C",
+              "channelRef": "5",
+              "type": "QNode"
+            }
+          },
+          {
+            "ID": "3",
+            "name": "result_to_B",
+            "type": "classic_bsm_result",
+            "direction": "out",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-B",
+              "channelRef": "8",
+              "type": "QNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "4",
+            "name": "result_to_C",
+            "type": "classic_bsm_result",
+            "direction": "out",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-C",
+              "channelRef": "7",
+              "type": "QNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "5",
+            "name": "clk_to_B",
+            "type": "classic_clk",
+            "direction": "out",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-B",
+              "channelRef": "10",
+              "type": "QNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "6",
+            "name": "clk_to_C",
+            "type": "classic_clk",
+            "direction": "out",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-C",
+              "channelRef": "9",
+              "type": "QNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          }
+        ],
+        "id": "BSM-BC"
+      },
+      {
+        "size": 20,
+        "title": "BSM-AB",
+        "group": 1,
+        "label": "BSM-AB",
+        "shape": "circle",
+        "nu_q": 0,
+        "nu_c": 6,
+        "systemSettings": {
+          "mode": "daemon",
+          "threads": 5,
+          "workers": 5,
+          "type": "BSMNode",
+          "name": "bsm-AB.lbl.gov",
+          "ID": "BSM-AB",
+          "controlInterface": "10.0.0.20"
+        },
+        "quantumSettings": {
+          "bellStates": [
+            "∣Φ+⟩",
+            "∣Φ−⟩",
+            "∣Ψ+⟩",
+            "∣Ψ−⟩"
+          ],
+          "measurementRate": 1000,
+          "qubitEncoding": "polarization",
+          "detectorSettings": [
+            {
+              "name": "detector_1",
+              "efficiency": "0.99",
+              "darkCount": "1",
+              "countRate": {
+                "value": 1000,
+                "unit": "Hz"
+              },
+              "timeResolution": {
+                "value": 100,
+                "unit": "ns"
+              }
+            },
+            {
+              "name": "detector_2",
+              "efficiency": "0.99",
+              "darkCount": "1",
+              "countRate": {
+                "value": 1000,
+                "unit": "Hz"
+              },
+              "timeResolution": {
+                "value": 100,
+                "unit": "ns"
+              }
+            }
+          ]
+        },
+        "channels": [
+          {
+            "ID": "1",
+            "name": "from_LBNL-A",
+            "type": "quantum",
+            "direction": "in",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": -3,
+            "neighbor": {
+              "systemRef": "LBNL-A",
+              "channelRef": "5",
+              "type": "QNode"
+            }
+          },
+          {
+            "ID": "2",
+            "name": "from_LBNL-B",
+            "type": "quantum",
+            "direction": "in",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": -3,
+            "neighbor": {
+              "systemRef": "LBNL-B",
+              "channelRef": "5",
+              "type": "QNode"
+            }
+          },
+          {
+            "ID": "3",
+            "name": "result_to_A",
+            "type": "classic_bsm_result",
+            "direction": "out",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-A",
+              "channelRef": "7",
+              "type": "QNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "4",
+            "name": "result_to_B",
+            "type": "classic_bsm_result",
+            "direction": "out",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-B",
+              "channelRef": "7",
+              "type": "QNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "5",
+            "name": "clk_to_A",
+            "type": "classic_clk",
+            "direction": "out",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-A",
+              "channelRef": "9",
+              "type": "QNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "6",
+            "name": "clk_to_B",
+            "type": "classic_clk",
+            "direction": "out",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-B",
+              "channelRef": "9",
+              "type": "QNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          }
+        ],
+        "id": "BSM-AB"
+      },
+      {
+        "size": 20,
+        "title": "LBNL-C",
+        "group": 1,
+        "label": "LBNL-C",
+        "shape": "circle",
+        "nu_q": 40,
+        "nu_c": 10,
+        "systemSettings": {
+          "mode": "daemon",
+          "threads": 3,
+          "workers": 3,
+          "type": "QNode",
+          "name": "q-node-C.lbl.gov",
+          "ID": "LBNL-C",
+          "controlInterface": "10.0.0.12"
+        },
+        "qubitSettings": {
+          "qubits": [
+            {
+              "ID": "1",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "2",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "3",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "4",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "5",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "6",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "7",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "8",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "9",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "10",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "11",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "12",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "13",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "14",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "15",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "16",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "17",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "18",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "19",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "20",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "21",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "22",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "23",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "24",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "25",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "26",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "27",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "28",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "29",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "30",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "31",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "32",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "33",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "34",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "35",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "36",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "37",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "38",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "39",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "40",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            }
+          ],
+          "operations": {
+            "oneQubitGates": [
+              {
+                "gate": "rot_x",
+                "qubits": [
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6",
+                  "7",
+                  "8",
+                  "9",
+                  "10",
+                  "11",
+                  "12",
+                  "13",
+                  "14",
+                  "15",
+                  "16",
+                  "17",
+                  "18",
+                  "19",
+                  "20",
+                  "21",
+                  "22",
+                  "23",
+                  "24",
+                  "25",
+                  "26",
+                  "27",
+                  "28",
+                  "29",
+                  "30",
+                  "31",
+                  "32",
+                  "33",
+                  "34",
+                  "35",
+                  "36",
+                  "37",
+                  "38",
+                  "39",
+                  "40"
+                ]
+              }
+            ],
+            "twoQubitGates": [
+              {
+                "gate": "cnot",
+                "qubits": [
+                  [
+                    "1",
+                    "21"
+                  ],
+                  [
+                    "2",
+                    "22"
+                  ],
+                  [
+                    "3",
+                    "23"
+                  ],
+                  [
+                    "4",
+                    "24"
+                  ],
+                  [
+                    "5",
+                    "25"
+                  ],
+                  [
+                    "6",
+                    "26"
+                  ],
+                  [
+                    "7",
+                    "27"
+                  ],
+                  [
+                    "8",
+                    "28"
+                  ],
+                  [
+                    "9",
+                    "29"
+                  ],
+                  [
+                    "10",
+                    "30"
+                  ],
+                  [
+                    "11",
+                    "31"
+                  ],
+                  [
+                    "12",
+                    "32"
+                  ],
+                  [
+                    "13",
+                    "33"
+                  ],
+                  [
+                    "14",
+                    "34"
+                  ],
+                  [
+                    "15",
+                    "35"
+                  ],
+                  [
+                    "16",
+                    "36"
+                  ],
+                  [
+                    "17",
+                    "37"
+                  ],
+                  [
+                    "18",
+                    "38"
+                  ],
+                  [
+                    "19",
+                    "39"
+                  ],
+                  [
+                    "20",
+                    "40"
+                  ]
+                ]
+              }
+            ]
+          }
+        },
+        "matterLightInterfaceSettings": [
+          {
+            "ID": "1",
+            "name": "Interface 1",
+            "entanglement": {
+              "rate": {
+                "value": 1000,
+                "unit": "Hz"
+              },
+              "type": "∣Φ+⟩"
+            },
+            "flyingQubit": {
+              "type": "polarization",
+              "wavelength": {
+                "value": 1550,
+                "unit": "nm"
+              }
+            }
+          }
+        ],
+        "channels": [
+          {
+            "ID": "1",
+            "name": "to_A",
+            "type": "classic_clk",
+            "direction": "out",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": 10,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-A",
+              "channelRef": "4",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "2",
+            "name": "from_A",
+            "type": "classic_clk",
+            "direction": "in",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": 10,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-A",
+              "channelRef": "3",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "3",
+            "name": "to_B",
+            "type": "classic_clk",
+            "direction": "out",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": 10,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-B",
+              "channelRef": "4",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "4",
+            "name": "from_B",
+            "type": "classic_clk",
+            "direction": "in",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": 10,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-B",
+              "channelRef": "3",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "5",
+            "name": "to_BSM-BC",
+            "type": "quantum",
+            "direction": "out",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": -3,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "BSM-BC",
+              "channelRef": "2",
+              "type": "BSMNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "6",
+            "name": "to_BSM-CA",
+            "type": "quantum",
+            "direction": "out",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": -3,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "BSM-CA",
+              "channelRef": "1",
+              "type": "BSMNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "7",
+            "name": "result_from_BSM-BC",
+            "type": "classic_bsm_result",
+            "direction": "in",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "BSM-BC",
+              "channelRef": "4",
+              "type": "BSMNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "8",
+            "name": "result_from_BSM-CA",
+            "type": "classic_bsm_result",
+            "direction": "in",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "BSM-CA",
+              "channelRef": "3",
+              "type": "BSMNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "9",
+            "name": "clk_from_BSM-BC",
+            "type": "classic_clk",
+            "direction": "in",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "BSM-BC",
+              "channelRef": "6",
+              "type": "BSMNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "10",
+            "name": "clk_from_BSM-CA",
+            "type": "classic_clk",
+            "direction": "in",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "BSM-CA",
+              "channelRef": "5",
+              "type": "BSMNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          }
+        ],
+        "id": "LBNL-C"
+      },
+      {
+        "size": 20,
+        "title": "LBNL-B",
+        "group": 1,
+        "label": "LBNL-B",
+        "shape": "circle",
+        "nu_q": 40,
+        "nu_c": 10,
+        "systemSettings": {
+          "mode": "daemon",
+          "threads": 3,
+          "workers": 3,
+          "type": "QNode",
+          "name": "q-node-B.lbl.gov",
+          "ID": "LBNL-B",
+          "controlInterface": "10.0.0.11"
+        },
+        "qubitSettings": {
+          "qubits": [
+            {
+              "ID": "1",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "2",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "3",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "4",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "5",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "6",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "7",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "8",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "9",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "10",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "11",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "12",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "13",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "14",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "15",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "16",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "17",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "18",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "19",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "20",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 1,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 0.5,
+                "unit": "s"
+              },
+              "type": "communication"
+            },
+            {
+              "ID": "21",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "22",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "23",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "24",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "25",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "26",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "27",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "28",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "29",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "30",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "31",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "32",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "33",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "34",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "35",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "36",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "37",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "38",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "39",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            },
+            {
+              "ID": "40",
+              "quantumObject": "nv_center",
+              "T1": {
+                "value": 2,
+                "unit": "s"
+              },
+              "T2": {
+                "value": 1.5,
+                "unit": "s"
+              },
+              "type": "data"
+            }
+          ],
+          "operations": {
+            "oneQubitGates": [
+              {
+                "gate": "rot_x",
+                "qubits": [
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6",
+                  "7",
+                  "8",
+                  "9",
+                  "10",
+                  "11",
+                  "12",
+                  "13",
+                  "14",
+                  "15",
+                  "16",
+                  "17",
+                  "18",
+                  "19",
+                  "20",
+                  "21",
+                  "22",
+                  "23",
+                  "24",
+                  "25",
+                  "26",
+                  "27",
+                  "28",
+                  "29",
+                  "30",
+                  "31",
+                  "32",
+                  "33",
+                  "34",
+                  "35",
+                  "36",
+                  "37",
+                  "38",
+                  "39",
+                  "40"
+                ]
+              }
+            ],
+            "twoQubitGates": [
+              {
+                "gate": "cnot",
+                "qubits": [
+                  [
+                    "1",
+                    "21"
+                  ],
+                  [
+                    "2",
+                    "22"
+                  ],
+                  [
+                    "3",
+                    "23"
+                  ],
+                  [
+                    "4",
+                    "24"
+                  ],
+                  [
+                    "5",
+                    "25"
+                  ],
+                  [
+                    "6",
+                    "26"
+                  ],
+                  [
+                    "7",
+                    "27"
+                  ],
+                  [
+                    "8",
+                    "28"
+                  ],
+                  [
+                    "9",
+                    "29"
+                  ],
+                  [
+                    "10",
+                    "30"
+                  ],
+                  [
+                    "11",
+                    "31"
+                  ],
+                  [
+                    "12",
+                    "32"
+                  ],
+                  [
+                    "13",
+                    "33"
+                  ],
+                  [
+                    "14",
+                    "34"
+                  ],
+                  [
+                    "15",
+                    "35"
+                  ],
+                  [
+                    "16",
+                    "36"
+                  ],
+                  [
+                    "17",
+                    "37"
+                  ],
+                  [
+                    "18",
+                    "38"
+                  ],
+                  [
+                    "19",
+                    "39"
+                  ],
+                  [
+                    "20",
+                    "40"
+                  ]
+                ]
+              }
+            ]
+          }
+        },
+        "matterLightInterfaceSettings": [
+          {
+            "ID": "1",
+            "name": "Interface 1",
+            "entanglement": {
+              "rate": {
+                "value": 1000,
+                "unit": "Hz"
+              },
+              "type": "∣Φ+⟩"
+            },
+            "flyingQubit": {
+              "type": "polarization",
+              "wavelength": {
+                "value": 1550,
+                "unit": "nm"
+              }
+            }
+          }
+        ],
+        "channels": [
+          {
+            "ID": "1",
+            "name": "to_A",
+            "type": "classic_clk",
+            "direction": "out",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": 10,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-A",
+              "channelRef": "2",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "2",
+            "name": "from_A",
+            "type": "classic_clk",
+            "direction": "in",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": 10,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-A",
+              "channelRef": "1",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "3",
+            "name": "to_C",
+            "type": "classic_clk",
+            "direction": "out",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": 10,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-C",
+              "channelRef": "4",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "4",
+            "name": "from_C",
+            "type": "classic_clk",
+            "direction": "in",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": 10,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "LBNL-C",
+              "channelRef": "3",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "5",
+            "name": "to_BSM-AB",
+            "type": "quantum",
+            "direction": "out",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": -3,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "BSM-AB",
+              "channelRef": "2",
+              "type": "BSMNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "6",
+            "name": "to_BSM-BC",
+            "type": "quantum",
+            "direction": "out",
+            "wavelength": {
+              "value": 1550,
+              "unit": "nm"
+            },
+            "power": -3,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "BSM-BC",
+              "channelRef": "1",
+              "type": "BSMNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "7",
+            "name": "result_from_BSM-AB",
+            "type": "classic_bsm_result",
+            "direction": "in",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "BSM-AB",
+              "channelRef": "4",
+              "type": "BSMNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "8",
+            "name": "result_from_BSM-BC",
+            "type": "classic_bsm_result",
+            "direction": "in",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "BSM-BC",
+              "channelRef": "3",
+              "type": "BSMNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "9",
+            "name": "clk_from_BSM-AB",
+            "type": "classic_clk",
+            "direction": "in",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "BSM-AB",
+              "channelRef": "6",
+              "type": "BSMNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          },
+          {
+            "ID": "10",
+            "name": "clk_from_BSM-BC",
+            "type": "classic_clk",
+            "direction": "in",
+            "wavelength": {
+              "value": 1310,
+              "unit": "nm"
+            },
+            "power": 1.4,
+            "length": {
+              "value": 1,
+              "unit": "km"
+            },
+            "neighbor": {
+              "systemRef": "BSM-BC",
+              "channelRef": "5",
+              "type": "BSMNode",
+              "loss": {
+                "value": 5,
+                "unit": "dB"
+              }
+            }
+          }
+        ],
+        "id": "LBNL-B"
+      }
+    ],
+    "edges": [
+      {
+        "weight": 2,
+        "title": "classic_bsm_result",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "BSM-CA",
+        "target": "LBNL-C",
+        "key": 0
+      },
+      {
+        "weight": 2,
+        "title": "classic_clk",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "BSM-CA",
+        "target": "LBNL-C",
+        "key": 1
+      },
+      {
+        "weight": 2,
+        "title": "classic_bsm_result",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "BSM-CA",
+        "target": "LBNL-A",
+        "key": 0
+      },
+      {
+        "weight": 2,
+        "title": "classic_clk",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "BSM-CA",
+        "target": "LBNL-A",
+        "key": 1
+      },
+      {
+        "weight": 2,
+        "title": "classic_clk",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "LBNL-A",
+        "target": "LBNL-B",
+        "key": 0
+      },
+      {
+        "weight": 2,
+        "title": "classic_clk",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "LBNL-A",
+        "target": "LBNL-C",
+        "key": 0
+      },
+      {
+        "weight": 2,
+        "title": "quantum",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "LBNL-A",
+        "target": "BSM-AB",
+        "key": 0
+      },
+      {
+        "weight": 2,
+        "title": "quantum",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "LBNL-A",
+        "target": "BSM-CA",
+        "key": 0
+      },
+      {
+        "weight": 2,
+        "title": "classic_bsm_result",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "BSM-BC",
+        "target": "LBNL-B",
+        "key": 0
+      },
+      {
+        "weight": 2,
+        "title": "classic_clk",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "BSM-BC",
+        "target": "LBNL-B",
+        "key": 1
+      },
+      {
+        "weight": 2,
+        "title": "classic_bsm_result",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "BSM-BC",
+        "target": "LBNL-C",
+        "key": 0
+      },
+      {
+        "weight": 2,
+        "title": "classic_clk",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "BSM-BC",
+        "target": "LBNL-C",
+        "key": 1
+      },
+      {
+        "weight": 2,
+        "title": "classic_bsm_result",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "BSM-AB",
+        "target": "LBNL-A",
+        "key": 0
+      },
+      {
+        "weight": 2,
+        "title": "classic_clk",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "BSM-AB",
+        "target": "LBNL-A",
+        "key": 1
+      },
+      {
+        "weight": 2,
+        "title": "classic_bsm_result",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "BSM-AB",
+        "target": "LBNL-B",
+        "key": 0
+      },
+      {
+        "weight": 2,
+        "title": "classic_clk",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "BSM-AB",
+        "target": "LBNL-B",
+        "key": 1
+      },
+      {
+        "weight": 2,
+        "title": "classic_clk",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "LBNL-C",
+        "target": "LBNL-A",
+        "key": 0
+      },
+      {
+        "weight": 2,
+        "title": "classic_clk",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "LBNL-C",
+        "target": "LBNL-B",
+        "key": 0
+      },
+      {
+        "weight": 2,
+        "title": "quantum",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "LBNL-C",
+        "target": "BSM-BC",
+        "key": 0
+      },
+      {
+        "weight": 2,
+        "title": "quantum",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "LBNL-C",
+        "target": "BSM-CA",
+        "key": 0
+      },
+      {
+        "weight": 2,
+        "title": "classic_clk",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "LBNL-B",
+        "target": "LBNL-A",
+        "key": 0
+      },
+      {
+        "weight": 2,
+        "title": "classic_clk",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "LBNL-B",
+        "target": "LBNL-C",
+        "key": 0
+      },
+      {
+        "weight": 2,
+        "title": "quantum",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "LBNL-B",
+        "target": "BSM-AB",
+        "key": 0
+      },
+      {
+        "weight": 2,
+        "title": "quantum",
+        "dashes": false,
+        "arrows": "bottom",
+        "color": null,
+        "source": "LBNL-B",
+        "target": "BSM-BC",
+        "key": 0
+      }
+    ]
+  }
+]

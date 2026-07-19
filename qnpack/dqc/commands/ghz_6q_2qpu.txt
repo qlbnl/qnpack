@@ -1,0 +1,37 @@
+GHZ State: 6 qubits, 2 QPUs
+QPU 0: qubits 0-2 (3 qubits)
+QPU 1: qubits 3-5 (3 qubits)
+Cut edges: 1 (between qubit 2 and 3)
+============================================================
+Total commands: 25
+Local gates: 22
+Remote gates: 1
+Starting processes: 1
+Ending processes: 1
+============================================================
+
+Rz(3) server_0[0];
+H server_1[0];
+Rz(3) server_1[1];
+Rz(3) server_1[2];
+Rz(3) server_1[3];
+Rz(3) server_1[4];
+H server_0[0];
+Rz(1) server_1[0];
+H server_1[1];
+H server_1[2];
+H server_1[3];
+H server_1[4];
+starting_process server_0[0], server_1_link_register[0];
+CU1(1) server_1[1], server_1[0];
+H server_1[1];
+CU1(1) server_1[2], server_1[1];
+H server_1[2];
+CU1(1) server_1[3], server_1[2];
+H server_1[3];
+CU1(1) server_1[4], server_1[3];
+H server_1[4];
+CU1(1) server_1_link_register[0], server_1[4];
+ending_process server_1_link_register[0], server_0[0];
+H server_0[0];
+Rz(3) server_0[0];

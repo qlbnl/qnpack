@@ -1,0 +1,87 @@
+sim:
+  debug: false
+  iterations: 10
+
+# Circuit source configuration:
+#   mode: "tket"  — use pytket-dqc dist_commands text file
+#   mode: "cisco" — use Cisco QASM 3.0 file directly
+circuit:
+  mode: "tket"
+  pre_schedule_entanglement: false
+  # Path to the dist_commands file (used when mode=tket)
+  dist_commands_file: "commands/grover_4_3qpu.txt"
+  #dist_commands_file: "commands/grover_4q_3qpu.txt"
+  # "commands/dist_commands_4q.txt"
+  # Path to the QASM 3.0 file (used when mode=cisco)
+  qasm_file: "qasm/grover4_1qpu.qasm"
+  # "qasm/grover4_topv1.qasm"
+  # "qasm/grover12_3qpu.qasm"
+  # measure_qubits: which memory positions to read per QPU after each run.
+  #   Used only in tket mode; cisco/file modes derive this from the circuit file.
+  #   Format: "{qpu_id: [pos, ...], ...}" (Python dict literal, parsed with ast.literal_eval)
+  #   Presets (tket mode):
+  #   "{1: [21, 20], 2: [20], 3: [20]}"           # grover 4q 3qpu
+  #   "{1: [21, 20], 2: [24, 23, 22, 21, 20], 3: [21, 20]}"  # grover 9q 3qpu
+  #   "{1: [20, 21, 22, 23, 24, 25], 2: [20, 21, 22], 3: [20, 21, 22]}"  # grover 12q 3qpu
+  #   "{1: [20, 21, 22, 23, 24, 25, 26, 27, 28]}"  # bv/qaoa/grover 9q single qpu
+  #   "{1: [20, 21, 22, 23], 2: [20, 21, 22, 23, 24]}"  # bv 9q 2qpu
+  #   "{1: [20, 21, 22, 23, 24, 25], 3: [20, 21, 22]}"  # qaoa 9q 2qpu
+  #   "{2: [20, 21, 22, 23, 24], 1: [20, 21, 22, 23]}"  # grover 9q 2qpu
+  #   "{3: [20, 21, 22, 23], 1: [20, 21, 22], 2: [20, 21]}"  # bv 9q 3qpu
+  #   "{1: [20, 21, 22, 23], 2: [20, 21, 22, 23], 3: [20]}"  # qaoa 3qpu
+  #   "{3: [21, 20], 2: [20], 1: [21, 20]}"        # grover 5q 3qpu  ← active
+  #   "{1: [22, 20, 21], 2: [20, 21], 3: [20]}"    # grover 6q 3qpu
+  #   "{3: [22, 21, 20], 2: [20], 1: [22, 21, 20]}"  # grover 7q 3qpu
+  #   "{1: [22, 20, 21], 2: [22, 21, 20], 3: [21, 20]}"  # grover 8q 3qpu
+  #   "{2: [21, 20], 1: [21, 20]}"                 # grover 4q 2qpu
+  #   "{2: [20, 21], 1: [22, 21, 20]}"             # grover 5q 2qpu
+  #   "{2: [22, 21, 20], 1: [22, 21, 20]}"         # grover 6q 2qpu
+  #   "{2: [22, 21, 20], 1: [23, 22, 21, 20]}"     # grover 7q 2qpu
+  #   "{2: [21, 20, 23, 22], 1: [23, 22, 21, 20]}" # grover 8q 2qpu
+  measure_qubits: "{1: [21, 20], 2: [20], 3: [20]}"
+
+qpu:
+  num_qpu_nodes: 2
+  qubits: 6
+  two_q_depolar_prob: 0    # 0.0001  — depolarising probability after every 2-qubit gate (cx, CU1, CNOT)
+  one_q_depolar_prob: 0    # 0.00001 — depolarising probability after every 1-qubit gate (h, x, z, rz, sx, sdg, u1, u2, u3, s)
+  #two_q_depolar_prob: 0.0001
+  #one_q_depolar_prob: 0.00001
+  emission_fidelity: 1         # default single-run value (noiseless, overridden by sweep)
+  emission_duration: 0            # Duration of photon emission (ns)
+  collection_efficiency: 1     # photon collection efficiency (1.0 = no loss)
+
+memory:
+  noise_model: "T1T2NoiseModel"  # T1T2NoiseModel for trapped ions
+  # T1: 600000000               # T1 coherence time (ns) = infinite (noiseless default)
+  # T2: 60000000               # T2 coherence time (ns) = infinite (noiseless default)
+  T1: 1e15
+  T2: 1e15
+
+gate_durations:
+  one_q_gate_duration: 5000       # 0 ns - instantaneous 1-qubit gates (noiseless default)
+  two_q_gate_duration: 10700      # 0 ns - instantaneous 2-qubit gates (noiseless default)
+  #one_q_gate_duration: 0       # Duration of 1-qubit gates (ns)
+  #two_q_gate_duration: 0      # Duration of 2-qubit gates (
+
+clock:
+  HZ: 1000000  # 1 MHz
+  max_ticks: -1
+
+channel:
+  q_lightspeed: 200000            # Speed of light in fibre (km/s)
+  c_lightspeed: 200000            # Classical signal speed through channel (km/s)
+  photon_loss: 0 #0.2                # Photon loss probability in channel (0 = no loss, 0.2 = 0.2 dB/km)
+  init_photon_loss: 0 #0.2           # Initial photon loss due to QFC (0 = no loss, 0.7 = 70% init loss)
+  quantum_noise_model: "DepolarNoiseModel"  # Quantum noise model type
+  fiber_depolar_rate: 0 #0.2      # Depolarization rate in fiber.
+  time_independent: true          # true = rate is direct depol probability per photon (recommended for short channels)
+
+bsm:
+  detection_window: 4320000       # BSM detector gating window (ns)
+  system_delay: 0                 # BSM detector system delay (ns)
+  coupling_efficiency: 1          # Photon coupling efficiency (0 to 1)
+  detector_wait_factor: 1.05       # Multiplier on travel time for detector dead wait
+  max_emission_retries: 90        # Maximum retry attempts for photon emission
+  retry_duration: 0               # Duration between retries (ns)
+
