@@ -196,7 +196,7 @@ class QPUNodeBuilder:
     def _create_physical_instructions(self):
         """Define physical instructions available to all QPUs."""
         # Import here to avoid circular dependency with protocols/qpu.py
-        from .protocols.qpu import DQC_EMIT
+        from ..protocols.qpu import DQC_EMIT
 
         _1q_noise = (
             DepolarNoiseModel(self.one_q_depolar_prob, time_independent=True)

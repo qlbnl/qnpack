@@ -38,7 +38,7 @@ from netsquid.qubits import qubitapi as qapi
 from netsquid.qubits import operators as ops
 from netsquid.components.qprogram import QuantumProgram
 
-from qnpack.dqc.instruction_set import GATE_OPS
+from qnpack.dqc.models.instruction_set import GATE_OPS
 
 log = logging.getLogger(__name__)
 

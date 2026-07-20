@@ -7,7 +7,7 @@ Public API
 ----------
     from qnpack.dqc import DQCSimulation
     from qnpack.dqc.protocols import DQCProtocol
-    from qnpack.dqc.node_builder import QPUNodeBuilder, create_bsm_nodes_from_topology
+    from qnpack.dqc.models.node_builder import QPUNodeBuilder, create_bsm_nodes_from_topology
 """
 
 from .sim import DQCSimulation

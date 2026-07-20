@@ -125,7 +125,7 @@ def create_switch_nodes(
     tuple
         ``(quantum_switch_node, classical_switch_node, q_switch, c_switch)``
     """
-    from qnpack.dqc.qswitch import FullMeshOpticalSwitch, ClassicalSwitch
+    from qnpack.dqc.models.qswitch import FullMeshOpticalSwitch, ClassicalSwitch
 
     # Build label → node maps
     label_to_qpu_node = {
@@ -287,8 +287,8 @@ def build_switch_connections(
     time_independent : bool
         Whether depolar rate is time-independent.
     """
-    from qnpack.dqc.node_builder import SafeDepolarNoiseModel
-    from qnpack.dqc.qswitch import ClassicalSwitch
+    from qnpack.dqc.models.node_builder import SafeDepolarNoiseModel
+    from qnpack.dqc.models.qswitch import ClassicalSwitch
     from netsquid.components.models.qerrormodels import FibreLossModel
 
     label_to_qpu_node = {

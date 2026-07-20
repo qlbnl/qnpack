@@ -789,7 +789,7 @@ class ControllerProtocol(NodeProtocol):
         parsed = frontend.parse(qpu_info)
 
         # ── Validate parsed commands against the instruction-set registry ──
-        from qnpack.dqc.validation import validate_commands
+        from qnpack.dqc.models.validation import validate_commands
         validation_errors = validate_commands(parsed)
         if validation_errors:
             for ve in validation_errors:

@@ -19,12 +19,12 @@ from netsquid.qubits.qformalism import QFormalism
 from netsquid.components.clock import Clock
 
 from qnpack.dqc.protocols import DQCProtocol
-from qnpack.dqc.node_builder import QPUNodeBuilder, create_bsm_nodes_from_topology, SafeDepolarNoiseModel
+from qnpack.dqc.models.node_builder import QPUNodeBuilder, create_bsm_nodes_from_topology, SafeDepolarNoiseModel
 from qnpack.dqc.frontends import load_frontend
 from qnpack.common.logging import setup_logging
 from qnpack.common.constants import Constants
 from qnpack.common.simulation import Simulation
-from qnpack.dqc.switch_node_builder import (
+from qnpack.dqc.models.switch_node_builder import (
     create_switch_nodes,
     build_switch_connections,
     print_network_connections,

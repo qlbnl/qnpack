@@ -20,7 +20,7 @@ This module provides:
     that routes photons through the quantum switch and receives results/clocks
     through the classical switch.
 
-Network wiring is handled by :mod:`qnpack.dqc.switch_node_builder`.
+Network wiring is handled by :mod:`qnpack.dqc.models.switch_node_builder`.
 
 Design
 ------
@@ -70,7 +70,7 @@ class QuantumSwitchProtocol(NodeProtocol):
     node : Node
         The switch node (``SwitchNode``).
     q_switch : FullMeshOpticalSwitch
-        The optical switch component (from ``qnpack.dqc.qswitch``).
+        The optical switch component (from ``qnpack.dqc.models.qswitch``).
     qpu_port_map : dict
         Mapping of ``qpu_label -> switch_node_port_name`` for QPU inputs
         (e.g. ``{'LBNL-A': 'qin_LBNL-A', ...}``).
@@ -201,7 +201,7 @@ class SwitchedEntanglementWorker(NodeProtocol):
         This QPU's topology label (e.g. ``'LBNL-A'``), used to identify the
         switch input port.
     q_switch : FullMeshOpticalSwitch
-        The optical switch component (from ``qnpack.dqc.qswitch``).
+        The optical switch component (from ``qnpack.dqc.models.qswitch``).
     name : str or None
         Protocol name.
     """
