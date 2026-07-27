@@ -270,6 +270,8 @@ class ControllerProtocol(NodeProtocol):
         name=None,
         run_idx=0,
         frontend=None,
+        pre_labeled_commands=None,
+        pre_process_maps=None,
     ):
         super().__init__(node, name=name)
         self.cfg = cfg
@@ -280,6 +282,14 @@ class ControllerProtocol(NodeProtocol):
         self.qpu_commands = {}
         self.qpu_info = qpu_info or {}
         self.bsm_info = bsm_info or {}
+
+        # Pre-labeled commands injected from outside (e.g. the DQC plugin).
+        # When set, ControllerProtocol.run() skips frontend.parse(),
+        # validate_commands(), and label_and_build_maps() and uses these
+        # directly.  Keys must be 1-based integer QPU IDs (matching the
+        # qpu_info convention).
+        self._pre_labeled_commands = pre_labeled_commands
+        self._pre_process_maps = pre_process_maps
         self.mapping_list = [
             ("QPU_1", "LBNL-A"),
             ("QPU_2", "LBNL-B"),
@@ -778,44 +788,56 @@ class ControllerProtocol(NodeProtocol):
 
         circuit_cfg = getattr(self.cfg, 'circuit', None)
 
-        if self.frontend is not None:
-            frontend = self.frontend
+        if self._pre_labeled_commands is not None:
+            # ── Fast path: pre-labeled commands supplied by the DQC plugin ────
+            # Skip parse, validate, and label — the plugin has already done this.
+            log.debug("[Controller] Using pre-labeled commands from DQC plugin")
+            self.qpu_commands        = self._pre_labeled_commands
+            self.start_qpus          = self._pre_process_maps['start_qpus']
+            self.end_qpus            = self._pre_process_maps['end_qpus']
+            self.entanglement_gen_labels = self._pre_process_maps['entanglement_gen_labels']
+            self.start_ready = {k: set() for k in self.start_qpus}
+            self.end_ready   = {k: set() for k in self.end_qpus}
         else:
-            frontend, _ = load_frontend(circuit_cfg)
-        qpu_info = {
-            i: {'num_qubits': qpu_node.qmemory.num_positions}
-            for i, qpu_node in enumerate(self.qpu_nodes, start=1)
-        }
-        parsed = frontend.parse(qpu_info)
+            # ── Normal path: parse → validate → label ────────────────────────
+            if self.frontend is not None:
+                frontend = self.frontend
+            else:
+                frontend, _ = load_frontend(circuit_cfg)
+            qpu_info = {
+                i: {'num_qubits': qpu_node.qmemory.num_positions}
+                for i, qpu_node in enumerate(self.qpu_nodes, start=1)
+            }
+            parsed = frontend.parse(qpu_info)
 
-        # ── Validate parsed commands against the instruction-set registry ──
-        from qnpack.dqc.models.validation import validate_commands
-        validation_errors = validate_commands(parsed)
-        if validation_errors:
-            for ve in validation_errors:
-                if ve.severity == "error":
-                    log.error(str(ve))
-                else:
-                    log.warning(str(ve))
-            hard_errors = [ve for ve in validation_errors if ve.severity == "error"]
-            if hard_errors:
-                raise ValueError(
-                    f"Circuit validation failed with {len(hard_errors)} error(s) "
-                    f"(and {len(validation_errors) - len(hard_errors)} warning(s)). "
-                    f"See log output above for details."
-                )
+            # ── Validate parsed commands against the instruction-set registry ──
+            from qnpack.dqc.models.validation import validate_commands
+            validation_errors = validate_commands(parsed)
+            if validation_errors:
+                for ve in validation_errors:
+                    if ve.severity == "error":
+                        log.error(str(ve))
+                    else:
+                        log.warning(str(ve))
+                hard_errors = [ve for ve in validation_errors if ve.severity == "error"]
+                if hard_errors:
+                    raise ValueError(
+                        f"Circuit validation failed with {len(hard_errors)} error(s) "
+                        f"(and {len(validation_errors) - len(hard_errors)} warning(s)). "
+                        f"See log output above for details."
+                    )
 
-        for qpu_id, commands in parsed.items():
-            self.qpu_commands[qpu_id] = commands
+            for qpu_id, commands in parsed.items():
+                self.qpu_commands[qpu_id] = commands
 
-        # ── Label commands and build process maps ─────────────────────────────
-        labeled, process_maps = label_and_build_maps(self.qpu_commands)
-        self.qpu_commands = labeled
-        self.start_qpus              = process_maps['start_qpus']
-        self.end_qpus                = process_maps['end_qpus']
-        self.entanglement_gen_labels = process_maps['entanglement_gen_labels']
-        self.start_ready = {k: set() for k in self.start_qpus}
-        self.end_ready   = {k: set() for k in self.end_qpus}
+            # ── Label commands and build process maps ─────────────────────────
+            labeled, process_maps = label_and_build_maps(self.qpu_commands)
+            self.qpu_commands = labeled
+            self.start_qpus              = process_maps['start_qpus']
+            self.end_qpus                = process_maps['end_qpus']
+            self.entanglement_gen_labels = process_maps['entanglement_gen_labels']
+            self.start_ready = {k: set() for k in self.start_qpus}
+            self.end_ready   = {k: set() for k in self.end_qpus}
 
         if getattr(self.cfg.circuit, 'pre_schedule_entanglement', False):
             expected_latency = getattr(

@@ -21,6 +21,7 @@ from netsquid.components.clock import Clock
 from qnpack.dqc.protocols import DQCProtocol
 from qnpack.dqc.models.node_builder import QPUNodeBuilder, create_bsm_nodes_from_topology, SafeDepolarNoiseModel
 from qnpack.dqc.frontends import load_frontend
+from qnpack.dqc.frontends.base import BaseFrontend
 from qnpack.common.logging import setup_logging
 from qnpack.common.constants import Constants
 from qnpack.common.simulation import Simulation
@@ -664,9 +665,10 @@ class DQCSimulation(Simulation):
                 row = frontend.get_result_row(protocol, run_idx, col_names, qpu_nodes)
 
             row["run"] = run_idx
+            row["bitstring"] = frontend.get_bitstring(row, col_names)
             results.append(row)
 
-            bitstring = frontend.get_bitstring(row, col_names)
+            bitstring = row["bitstring"]
             bit_vals  = "  ".join(f"{c}={row.get(c, '?')}" for c in col_names)
             log.info(f"--- Run {run_idx}: {bit_vals}  =>  bitstring={bitstring} ---")
 
@@ -754,8 +756,150 @@ class DQCSimulation(Simulation):
         log.info(f"Combined histogram saved to {hist_path}")
         plt.close(fig)
 
-    def start(self, num_runs=10):
-        """Run the DQC simulation, sweeping over all varying_params combinations.
+    def _send_to_plugin(self, host):
+        """Send the circuit to the QNCP DQC plugin via RPC and return the simulation payload.
+
+        Parameters
+        ----------
+        host : str
+            QNCP control-plane address (e.g. ``"localhost"``).
+
+        Returns
+        -------
+        dict
+            The ``simulation_payload`` from the plugin response.
+        """
+        import asyncio
+        from quantnet_mq.rpcclient import RPCClient
+        from quantnet_mq.schema.models import Schema
+
+        circuit_cfg = getattr(self.cfg, "circuit", None)
+        _, source = load_frontend(circuit_cfg, base_dir=self.base_dir)
+        mode = getattr(circuit_cfg, "mode", "cisco") if circuit_cfg else "cisco"
+        with open(source) as f:
+            circuit_content = f.read()
+
+        _schema_candidates = [
+            os.path.join(os.path.dirname(__file__), "..", "..", "..", "qn-plugins", "plugins", "schema", "dqc.yaml"),
+            os.path.join(os.getcwd(), "..", "..", "..", "qn-plugins", "plugins", "schema", "dqc.yaml"),
+            os.path.join(os.getcwd(), "schema", "dqc.yaml"),
+            os.path.join(os.path.dirname(__file__), "schema", "dqc.yaml"),
+        ]
+        schema_path = next((p for p in _schema_candidates if os.path.exists(p)), _schema_candidates[-1])
+        Schema.load_schema(schema_path, ns="dqc")
+
+        log.info(f"Sending {os.path.basename(source)} to QNCP at {host} ...")
+
+        async def _rpc():
+            client = RPCClient("dqc-sim-client", host=host)
+            client.set_handler("dqcRequest", None, "quantnet_mq.schema.models.dqc.dqcRequest")
+            await client.start()
+            try:
+                raw = await client.call(
+                    "dqcRequest",
+                    {"circuit_mode": mode, "circuit_content": circuit_content},
+                    timeout=120.0,
+                )
+                return json.loads(raw)
+            finally:
+                await client.stop()
+
+        response = asyncio.run(_rpc())
+        status = response.get("status", {})
+        if status.get("value") != "OK":
+            log.error(f"Plugin error: {status.get('message')}")
+            raise SystemExit(1)
+        return response["data"]["simulation_payload"]
+
+    def start_from_labeled(self, labeled_payload, num_runs=None):
+        """Run the simulation from a pre-labeled payload returned by the plugin.
+
+        Parameters
+        ----------
+        labeled_payload : dict
+            As returned by ``_send_to_plugin()``.
+        num_runs : int or None
+            Number of simulation runs; defaults to ``cfg.sim.iterations``.
+
+        Returns
+        -------
+        list
+            Result rows (one dict per run).
+        """
+        import copy
+
+        if num_runs is None:
+            num_runs = self.cfg.sim.iterations
+
+        raw_commands = labeled_payload["labeled_commands"]
+        raw_maps = labeled_payload["process_maps"]
+        labeled_commands = {int(k): v for k, v in raw_commands.items()}
+
+        def _restore_label_key(k):
+            try:
+                return int(k)
+            except (ValueError, TypeError):
+                return k
+
+        process_maps = {
+            "start_qpus": {
+                _restore_label_key(k): set(int(x) for x in v) for k, v in raw_maps.get("start_qpus", {}).items()
+            },
+            "end_qpus": {
+                _restore_label_key(k): set(int(x) for x in v) for k, v in raw_maps.get("end_qpus", {}).items()
+            },
+            "entanglement_gen_labels": set(raw_maps.get("entanglement_gen_labels", [])),
+        }
+
+        topology_data = labeled_payload.get("topology") or self.load_topology()
+
+        circuit_cfg = getattr(self.cfg, "circuit", None)
+        measure_qubits = _resolve_measure_qubits(circuit_cfg)
+
+        if measure_qubits is not None:
+            from qnpack.dqc.frontends.tket_frontend import TketFrontend
+            frontend = TketFrontend()
+            frontend._num_output_bits = labeled_payload.get("num_output_bits") or len(
+                [pos for positions in measure_qubits.values() for pos in positions]
+            )
+            frontend._output_reg_name = labeled_payload.get("output_reg_name", "m")
+            frontend._ir = {"measure_qubits": measure_qubits}
+        else:
+            frontend = BaseFrontend()
+            frontend._num_output_bits = labeled_payload.get("num_output_bits") or 0
+            frontend._output_reg_name = labeled_payload.get("output_reg_name", "m")
+
+        _orig_dqc_init = DQCProtocol.__init__
+
+        def _patched_dqc_init(self_proto, *args, **kwargs):
+            kwargs["frontend"] = None
+            kwargs["pre_labeled_commands"] = copy.deepcopy(labeled_commands)
+            kwargs["pre_process_maps"] = {
+                "start_qpus": copy.deepcopy(process_maps["start_qpus"]),
+                "end_qpus": copy.deepcopy(process_maps["end_qpus"]),
+                "entanglement_gen_labels": set(process_maps["entanglement_gen_labels"]),
+            }
+            _orig_dqc_init(self_proto, *args, **kwargs)
+
+        DQCProtocol.__init__ = _patched_dqc_init
+        try:
+            results, _, _, _ = self._run_single_config(
+                num_runs=num_runs,
+                measure_qubits=measure_qubits,
+                frontend=frontend,
+                topology_data=topology_data,
+            )
+        finally:
+            DQCProtocol.__init__ = _orig_dqc_init
+
+        return results
+
+    def start(self, num_runs=None, qncp_host=None):
+        """Run the DQC simulation.
+
+        When ``qncp_host`` is set, sends the circuit to the QNCP plugin,
+        receives the labeled payload, and simulates from it.  Otherwise
+        runs the local sweep over all varying_params combinations.
 
         Parameter resolution priority (highest → lowest):
           1. ``varying_params``  — list of values to sweep
@@ -764,15 +908,25 @@ class DQCSimulation(Simulation):
 
         Parameters
         ----------
-        num_runs : int
-            Number of independent simulation runs per parameter combination.
+        num_runs : int or None
+            Number of simulation runs; defaults to ``cfg.sim.iterations``.
+        qncp_host : str or None
+            QNCP control-plane address.  When set, plugin pipeline mode is used.
         """
+        if num_runs is None:
+            num_runs = self.cfg.sim.iterations
+
+        if qncp_host:
+            sim_payload = self._send_to_plugin(qncp_host)
+            return self.start_from_labeled(sim_payload, num_runs=num_runs)
+
+        # ── Local sweep mode ──────────────────────────────────────────────────
         import itertools
         from collections import Counter
 
         ns.set_qstate_formalism(QFormalism.KET)
 
-        circuit_cfg = getattr(self.cfg, 'circuit', None)
+        circuit_cfg = getattr(self.cfg, "circuit", None)
 
         # --- Load frontend ---
         frontend, source = load_frontend(circuit_cfg, base_dir=self.base_dir)
@@ -782,10 +936,10 @@ class DQCSimulation(Simulation):
         topology_data = self.load_topology()
 
         # --- Build parameter sweep lists ---
-        _qpu_cfg     = getattr(self.cfg, 'qpu',            None)
-        _memory_cfg  = getattr(self.cfg, 'memory',         None)
-        _gate_cfg    = getattr(self.cfg, 'gate_durations', None)
-        _channel_cfg = getattr(self.cfg, 'channel',        None)
+        _qpu_cfg = getattr(self.cfg, "qpu", None)
+        _memory_cfg = getattr(self.cfg, "memory", None)
+        _gate_cfg = getattr(self.cfg, "gate_durations", None)
+        _channel_cfg = getattr(self.cfg, "channel", None)
 
         def _sweep_list(param_name, module_cfg, cfg_default=0):
             if param_name in self.varying_params:
@@ -794,30 +948,43 @@ class DQCSimulation(Simulation):
                 return [self.fixed_params[param_name]]
             return [getattr(module_cfg, param_name, cfg_default) or cfg_default]
 
-        two_q_sweep       = _sweep_list('two_q_depolar_prob',    _qpu_cfg,     0)
-        one_q_sweep       = _sweep_list('one_q_depolar_prob',    _qpu_cfg,     0)
-        ef_sweep          = _sweep_list('emission_fidelity',     _qpu_cfg,     1.0)
-        ce_sweep          = _sweep_list('collection_efficiency', _qpu_cfg,     1.0)
-        T1_sweep          = _sweep_list('T1',                    _memory_cfg,  1e15)
-        T2_sweep          = _sweep_list('T2',                    _memory_cfg,  1e15)
-        one_q_dur_sweep   = _sweep_list('one_q_gate_duration',   _gate_cfg,    0)
-        two_q_dur_sweep   = _sweep_list('two_q_gate_duration',   _gate_cfg,    0)
-        photon_loss_sweep = _sweep_list('photon_loss',           _channel_cfg, 0)
-        init_loss_sweep   = _sweep_list('init_photon_loss',      _channel_cfg, 0)
-        fiber_depol_sweep = _sweep_list('fiber_depolar_rate',    _channel_cfg, 0)
+        two_q_sweep = _sweep_list("two_q_depolar_prob", _qpu_cfg, 0)
+        one_q_sweep = _sweep_list("one_q_depolar_prob", _qpu_cfg, 0)
+        ef_sweep = _sweep_list("emission_fidelity", _qpu_cfg, 1.0)
+        ce_sweep = _sweep_list("collection_efficiency", _qpu_cfg, 1.0)
+        T1_sweep = _sweep_list("T1", _memory_cfg, 1e15)
+        T2_sweep = _sweep_list("T2", _memory_cfg, 1e15)
+        one_q_dur_sweep = _sweep_list("one_q_gate_duration", _gate_cfg, 0)
+        two_q_dur_sweep = _sweep_list("two_q_gate_duration", _gate_cfg, 0)
+        photon_loss_sweep = _sweep_list("photon_loss", _channel_cfg, 0)
+        init_loss_sweep = _sweep_list("init_photon_loss", _channel_cfg, 0)
+        fiber_depol_sweep = _sweep_list("fiber_depolar_rate", _channel_cfg, 0)
 
-        param_names  = [
-            'two_q_depolar_prob', 'one_q_depolar_prob',
-            'emission_fidelity',  'collection_efficiency',
-            'T1', 'T2',
-            'one_q_gate_duration', 'two_q_gate_duration',
-            'photon_loss', 'init_photon_loss', 'fiber_depolar_rate',
+        param_names = [
+            "two_q_depolar_prob",
+            "one_q_depolar_prob",
+            "emission_fidelity",
+            "collection_efficiency",
+            "T1",
+            "T2",
+            "one_q_gate_duration",
+            "two_q_gate_duration",
+            "photon_loss",
+            "init_photon_loss",
+            "fiber_depolar_rate",
         ]
         param_sweeps = [
-            two_q_sweep, one_q_sweep, ef_sweep, ce_sweep,
-            T1_sweep, T2_sweep,
-            one_q_dur_sweep, two_q_dur_sweep,
-            photon_loss_sweep, init_loss_sweep, fiber_depol_sweep,
+            two_q_sweep,
+            one_q_sweep,
+            ef_sweep,
+            ce_sweep,
+            T1_sweep,
+            T2_sweep,
+            one_q_dur_sweep,
+            two_q_dur_sweep,
+            photon_loss_sweep,
+            init_loss_sweep,
+            fiber_depol_sweep,
         ]
 
         all_combos = list(itertools.product(*param_sweeps))
@@ -828,31 +995,31 @@ class DQCSimulation(Simulation):
         final_data = []
 
         for combo in all_combos:
-            param_dict       = dict(zip(param_names, combo))
-            two_q            = param_dict['two_q_depolar_prob']
-            one_q            = param_dict['one_q_depolar_prob']
-            emission_fidelity = param_dict['emission_fidelity']
-            collection_eff   = param_dict['collection_efficiency']
-            T1               = param_dict['T1']
-            T2               = param_dict['T2']
-            one_q_dur        = param_dict['one_q_gate_duration']
-            two_q_dur        = param_dict['two_q_gate_duration']
-            photon_loss      = param_dict['photon_loss']
-            init_loss        = param_dict['init_photon_loss']
-            fiber_depol      = param_dict['fiber_depolar_rate']
+            param_dict = dict(zip(param_names, combo))
+            two_q = param_dict["two_q_depolar_prob"]
+            one_q = param_dict["one_q_depolar_prob"]
+            emission_fidelity = param_dict["emission_fidelity"]
+            collection_eff = param_dict["collection_efficiency"]
+            T1 = param_dict["T1"]
+            T2 = param_dict["T2"]
+            one_q_dur = param_dict["one_q_gate_duration"]
+            two_q_dur = param_dict["two_q_gate_duration"]
+            photon_loss = param_dict["photon_loss"]
+            init_loss = param_dict["init_photon_loss"]
+            fiber_depol = param_dict["fiber_depolar_rate"]
 
             # Apply to cfg so setup_network_from_topology picks them up
-            self.cfg.qpu.two_q_depolar_prob            = two_q
-            self.cfg.qpu.one_q_depolar_prob            = one_q
-            self.cfg.qpu.emission_fidelity             = emission_fidelity
-            self.cfg.qpu.collection_efficiency         = collection_eff
-            self.cfg.memory.T1                         = T1
-            self.cfg.memory.T2                         = T2
+            self.cfg.qpu.two_q_depolar_prob = two_q
+            self.cfg.qpu.one_q_depolar_prob = one_q
+            self.cfg.qpu.emission_fidelity = emission_fidelity
+            self.cfg.qpu.collection_efficiency = collection_eff
+            self.cfg.memory.T1 = T1
+            self.cfg.memory.T2 = T2
             self.cfg.gate_durations.one_q_gate_duration = one_q_dur
             self.cfg.gate_durations.two_q_gate_duration = two_q_dur
-            self.cfg.channel.photon_loss               = photon_loss
-            self.cfg.channel.init_photon_loss          = init_loss
-            self.cfg.channel.fiber_depolar_rate        = fiber_depol
+            self.cfg.channel.photon_loss = photon_loss
+            self.cfg.channel.init_photon_loss = init_loss
+            self.cfg.channel.fiber_depolar_rate = fiber_depol
 
             # Build noise label
             noise_parts = []
@@ -872,21 +1039,14 @@ class DQCSimulation(Simulation):
 
             log.info(f"=== Config: {noise_label} ===")
 
-            results, col_names, num_output_bits, output_reg_name = \
-                self._run_single_config(
-                    num_runs=num_runs,
-                    measure_qubits=measure_qubits,
-                    frontend=frontend,
-                    topology_data=topology_data,
-                )
+            results, col_names, num_output_bits, output_reg_name = self._run_single_config(
+                num_runs=num_runs,
+                measure_qubits=measure_qubits,
+                frontend=frontend,
+                topology_data=topology_data,
+            )
 
-            bitstrings = [
-                "".join(
-                    str(int(r[c])) if r.get(c) is not None else "?"
-                    for c in col_names
-                )
-                for r in results
-            ]
+            bitstrings = ["".join(str(int(r[c])) if r.get(c) is not None else "?" for c in col_names) for r in results]
             counts = Counter(bitstrings)
             log.info(f"Bitstring counts: {dict(counts)}")
             top_5 = counts.most_common(5)
@@ -894,60 +1054,59 @@ class DQCSimulation(Simulation):
             for bitstring, count in top_5:
                 log.info(f"  {bitstring}: {count}")
 
-            final_data.append({
-                'noise_label':        noise_label,
-                'two_q_prob':         two_q,
-                'one_q_prob':         one_q,
-                'emission_fidelity':  emission_fidelity,
-                'collection_efficiency': collection_eff,
-                'T1':                 T1,
-                'T2':                 T2,
-                'one_q_gate_duration': one_q_dur,
-                'two_q_gate_duration': two_q_dur,
-                'photon_loss':        photon_loss,
-                'init_photon_loss':   init_loss,
-                'fiber_depolar_rate': fiber_depol,
-                'counts':             counts,
-                'col_names':          col_names,
-                'num_runs':           num_runs,
-                'num_output_bits':    num_output_bits,
-                'results':            results,
-                'top_5_bitstrings':   top_5,
-            })
+            final_data.append(
+                {
+                    "noise_label": noise_label,
+                    "two_q_prob": two_q,
+                    "one_q_prob": one_q,
+                    "emission_fidelity": emission_fidelity,
+                    "collection_efficiency": collection_eff,
+                    "T1": T1,
+                    "T2": T2,
+                    "one_q_gate_duration": one_q_dur,
+                    "two_q_gate_duration": two_q_dur,
+                    "photon_loss": photon_loss,
+                    "init_photon_loss": init_loss,
+                    "fiber_depolar_rate": fiber_depol,
+                    "counts": counts,
+                    "col_names": col_names,
+                    "num_runs": num_runs,
+                    "num_output_bits": num_output_bits,
+                    "results": results,
+                    "top_5_bitstrings": top_5,
+                }
+            )
 
         # --- Save results to CSV ---
         os.makedirs(self.output_dir, exist_ok=True)
         csv_rows = []
 
         for entry in final_data:
-            col_names   = entry['col_names']
-            noise_label = entry['noise_label'].replace('\n', ' ')
-            for r in entry['results']:
-                bitstring = "".join(
-                    str(int(r[c])) if r.get(c) is not None else "?"
-                    for c in col_names
-                )
+            col_names = entry["col_names"]
+            noise_label = entry["noise_label"].replace("\n", " ")
+            for r in entry["results"]:
+                bitstring = "".join(str(int(r[c])) if r.get(c) is not None else "?" for c in col_names)
                 run_avg_ent = None
-                if r.get('entanglement_durations'):
-                    durs = list(r['entanglement_durations'].values())
+                if r.get("entanglement_durations"):
+                    durs = list(r["entanglement_durations"].values())
                     run_avg_ent = sum(durs) / len(durs)
                 row_dict = {
-                    'noise_label':          noise_label,
-                    'two_q_depolar_prob':   entry['two_q_prob'],
-                    'one_q_depolar_prob':   entry['one_q_prob'],
-                    'emission_fidelity':    entry['emission_fidelity'],
-                    'collection_efficiency': entry['collection_efficiency'],
-                    'T1':                   entry['T1'],
-                    'T2':                   entry['T2'],
-                    'one_q_gate_duration':  entry['one_q_gate_duration'],
-                    'two_q_gate_duration':  entry['two_q_gate_duration'],
-                    'photon_loss':          entry['photon_loss'],
-                    'init_photon_loss':     entry['init_photon_loss'],
-                    'fiber_depolar_rate':   entry['fiber_depolar_rate'],
-                    'run':                  r.get('run', ''),
-                    'bitstring':            bitstring,
-                    'sim_duration_s':       r.get('sim_duration_s'),
-                    'avg_entanglement_time_s': run_avg_ent,
+                    "noise_label": noise_label,
+                    "two_q_depolar_prob": entry["two_q_prob"],
+                    "one_q_depolar_prob": entry["one_q_prob"],
+                    "emission_fidelity": entry["emission_fidelity"],
+                    "collection_efficiency": entry["collection_efficiency"],
+                    "T1": entry["T1"],
+                    "T2": entry["T2"],
+                    "one_q_gate_duration": entry["one_q_gate_duration"],
+                    "two_q_gate_duration": entry["two_q_gate_duration"],
+                    "photon_loss": entry["photon_loss"],
+                    "init_photon_loss": entry["init_photon_loss"],
+                    "fiber_depolar_rate": entry["fiber_depolar_rate"],
+                    "run": r.get("run", ""),
+                    "bitstring": bitstring,
+                    "sim_duration_s": r.get("sim_duration_s"),
+                    "avg_entanglement_time_s": run_avg_ent,
                 }
                 for c in col_names:
                     row_dict[c] = r.get(c)
@@ -959,20 +1118,14 @@ class DQCSimulation(Simulation):
         log.info("\n" + "=" * 80)
         log.info("SIMULATION TIME STATISTICS (per run)")
         log.info("=" * 80)
-        if 'sim_duration_s' in df.columns:
-            sim_durations = df['sim_duration_s'].dropna()
+        if "sim_duration_s" in df.columns:
+            sim_durations = df["sim_duration_s"].dropna()
             if len(sim_durations) > 0:
                 for idx, dur in enumerate(sim_durations):
                     log.info(f"  Run {idx:>3}: {dur:.6f} s")
-                log.info(f"  ---")
-                log.info(
-                    f"  Total simulation time ({len(sim_durations)} runs): "
-                    f"{sim_durations.sum():.6f} s"
-                )
-                log.info(
-                    f"  Average simulation time per run: "
-                    f"{sim_durations.mean():.6f} s"
-                )
+                log.info("  ---")
+                log.info(f"  Total simulation time ({len(sim_durations)} runs): " f"{sim_durations.sum():.6f} s")
+                log.info(f"  Average simulation time per run: " f"{sim_durations.mean():.6f} s")
         log.info("=" * 80)
 
         # Entanglement statistics
@@ -982,18 +1135,14 @@ class DQCSimulation(Simulation):
 
         all_entanglement_durations = {}
         for entry in final_data:
-            for r in entry['results']:
-                for ent_label, duration_s in r.get('entanglement_durations', {}).items():
+            for r in entry["results"]:
+                for ent_label, duration_s in r.get("entanglement_durations", {}).items():
                     all_entanglement_durations.setdefault(ent_label, []).append(duration_s)
 
         if all_entanglement_durations:
-            all_flat = [
-                d
-                for durs in all_entanglement_durations.values()
-                for d in durs
-            ]
+            all_flat = [d for durs in all_entanglement_durations.values() for d in durs]
             total_count = len(all_flat)
-            total_time  = sum(all_flat)
+            total_time = sum(all_flat)
             log.info(f"\nTotal number of entanglement events: {total_count}")
             log.info(f"Total entanglement time (all events): {total_time:.6f} s")
             log.info(
@@ -1006,16 +1155,16 @@ class DQCSimulation(Simulation):
         log.info("=" * 80 + "\n")
 
         # Build CSV filename
-        _pre_sched = getattr(circuit_cfg, 'pre_schedule_entanglement', False)
-        _pre_tag   = "prescheduled" if _pre_sched else "nopresched"
-        _src_file  = (
-            getattr(circuit_cfg, 'qasm_file', 'unknown')
-            if circuit_cfg.get('mode') == 'cisco'
-            else getattr(circuit_cfg, 'dist_commands_file', 'unknown')
+        _pre_sched = getattr(circuit_cfg, "pre_schedule_entanglement", False)
+        _pre_tag = "prescheduled" if _pre_sched else "nopresched"
+        _src_file = (
+            getattr(circuit_cfg, "qasm_file", "unknown")
+            if circuit_cfg.get("mode") == "cisco"
+            else getattr(circuit_cfg, "dist_commands_file", "unknown")
         )
         _cmd_stem = os.path.splitext(os.path.basename(_src_file))[0]
-        csv_name  = f"{_cmd_stem}_{num_runs}iter_{_pre_tag}.csv"
-        csv_path  = os.path.join(self.output_dir, csv_name)
+        csv_name = f"{_cmd_stem}_{num_runs}iter_{_pre_tag}.csv"
+        csv_path = os.path.join(self.output_dir, csv_name)
         df.to_csv(csv_path, index=False)
         log.info(f"Results saved to CSV: {csv_path}")
 
@@ -1030,16 +1179,15 @@ def main():
         description="Run a Distributed Quantum Computing (DQC) simulation.",
     )
     parser.add_argument(
-        "-p", "--parameters",
+        "-p",
+        "--parameters",
         default=Constants.DEFAULT_PARAM_FILE,
         metavar="FILE",
-        help=(
-            "Path to the parameters YAML configuration file "
-            f"(default: {Constants.DEFAULT_PARAM_FILE})"
-        ),
+        help=("Path to the parameters YAML configuration file " f"(default: {Constants.DEFAULT_PARAM_FILE})"),
     )
     parser.add_argument(
-        "-b", "--base-dir",
+        "-b",
+        "--base-dir",
         default=None,
         metavar="DIR",
         help=(
@@ -1050,32 +1198,41 @@ def main():
         ),
     )
     parser.add_argument(
-        "-t", "--topology",
+        "-t",
+        "--topology",
         default=None,
         metavar="FILE",
         help="Path to the topology JSON file (overrides default).",
     )
     parser.add_argument(
-        "-o", "--output-dir",
+        "-o",
+        "--output-dir",
         default=Constants.DEFAULT_OUTPUT_DIR,
         metavar="DIR",
-        help=(
-            "Directory for output results "
-            f"(default: {Constants.DEFAULT_OUTPUT_DIR})"
-        ),
+        help=("Directory for output results " f"(default: {Constants.DEFAULT_OUTPUT_DIR})"),
     )
     parser.add_argument(
-        "-n", "--num-runs",
+        "-n",
+        "--num-runs",
         type=int,
         default=None,
         metavar="N",
+        help=("Number of simulation iterations (overrides the value in " "the parameters file)."),
+    )
+    parser.add_argument(
+        "--qncp",
+        default=None,
+        metavar="HOST",
         help=(
-            "Number of simulation iterations (overrides the value in "
-            "the parameters file)."
+            "Address of the QNCP control plane (e.g. localhost or 192.168.1.10). "
+            "When provided, the circuit is sent to the DQC plugin via RPC and the "
+            "simulation is run from the returned labeled payload.  "
+            "Requires --qasm or --circuit-content; skips parameters.yml circuit settings."
         ),
     )
     parser.add_argument(
-        "-d", "--debug",
+        "-d",
+        "--debug",
         action="store_true",
         default=False,
         help="Enable debug-level logging.",
@@ -1083,7 +1240,7 @@ def main():
 
     args = parser.parse_args()
 
-    # Build fixed_params to inject CLI overrides into the config
+    # Build fixed_params from CLI overrides (same for both modes)
     fixed_params = {}
     if args.debug:
         fixed_params.setdefault("sim", {})["debug"] = True
@@ -1097,9 +1254,22 @@ def main():
         topology_file=args.topology,
     )
 
-    num_runs = args.num_runs if args.num_runs is not None else sim.cfg.sim.iterations
-    sim.start(num_runs=num_runs)
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
 
+    num_runs = args.num_runs if args.num_runs is not None else sim.cfg.sim.iterations
+    results = sim.start(num_runs=num_runs, qncp_host=args.qncp)
+
+    if args.qncp and results is not None:
+        output_data = json.dumps(results, indent=2)
+        if args.output_dir and args.output_dir != Constants.DEFAULT_OUTPUT_DIR:
+            os.makedirs(args.output_dir, exist_ok=True)
+            out_file = os.path.join(args.output_dir, "results.json")
+            with open(out_file, "w") as f:
+                f.write(output_data)
+            log.info(f"Results written to {out_file}")
+        else:
+            print(output_data)
 
 if __name__ == "__main__":
     main()

@@ -26,7 +26,8 @@ log = logging.getLogger(__name__)
 class DQCProtocol(LocalProtocol):
     def __init__(self, cfg, network, controller_node, qpu_nodes,
                  qpu_info=None, bsm_info=None, bsm_nodes=None, run_idx=0,
-                 frontend=None, q_switch=None, switch_node=None):
+                 frontend=None, q_switch=None, switch_node=None,
+                 pre_labeled_commands=None, pre_process_maps=None):
         super().__init__(nodes=network.nodes)
         self.cfg = cfg
         self.run_idx = run_idx
@@ -39,6 +40,8 @@ class DQCProtocol(LocalProtocol):
         self.frontend = frontend
         self.q_switch = q_switch
         self.switch_node = switch_node
+        self.pre_labeled_commands = pre_labeled_commands
+        self.pre_process_maps = pre_process_maps
         self.controller_protocol = None
         self.qpu_protocols = []
         self.bsm_protocols = []
@@ -55,6 +58,8 @@ class DQCProtocol(LocalProtocol):
             name="ControllerProtocol",
             run_idx=self.run_idx,
             frontend=self.frontend,
+            pre_labeled_commands=self.pre_labeled_commands,
+            pre_process_maps=self.pre_process_maps,
         )
         self.add_subprotocol(controller_protocol)
 
@@ -124,7 +129,7 @@ class DQCProtocol(LocalProtocol):
         log.debug(
             f"DQC Protocol setup complete: 1 controller, "
             f"{len(self.qpu_nodes)} QPUs, {len(self.bsm_nodes)} BSMs"
-            + (f", 1 QuantumSwitchProtocol" if self.q_switch is not None else "")
+            + (", 1 QuantumSwitchProtocol" if self.q_switch is not None else "")
         )
 
     def run(self):
@@ -136,18 +141,34 @@ class DQCProtocol(LocalProtocol):
 
         log.debug("[DQCProtocol] Controller finished. Waiting for QPUs to complete.")
 
+        # When pre-labeled commands are provided only a subset of QPUs may have
+        # work.  Idle QPUs suspend at await_port_input(ctrl_port) indefinitely
+        # and never emit SUCCESS, so sim_run() never terminates.  Derive the
+        # active set from pre_labeled_commands (already int-keyed at this point)
+        # and skip — then stop — any QPU that is not in it.
+        active_qpu_ids = (
+            set(self.pre_labeled_commands.keys())
+            if self.pre_labeled_commands is not None
+            else None
+        )
+
         qpu_protos = [
             proto for proto in self.subprotocols.values()
             if isinstance(proto, QPUProtocol)
         ]
+        idle_qpu_protos = []
+
         for qpu_proto in qpu_protos:
+            if active_qpu_ids is not None and qpu_proto.qpu_id not in active_qpu_ids:
+                idle_qpu_protos.append(qpu_proto)
+                continue
             if qpu_proto.is_running:
                 yield self.await_signal(qpu_proto, Signals.SUCCESS)
                 log.debug(f"[DQCProtocol] {qpu_proto.name} finished at {ns.sim_time()}")
 
         log.debug("[DQCProtocol] All QPUs finished. Cleaning up.")
 
-        # Stop BSMs, QuantumSwitchProtocol, and BSM workers (they run forever otherwise)
+        # Stop BSMs, QuantumSwitchProtocol, BSM workers, and any idle QPUs.
         for name, proto in self.subprotocols.items():
             if isinstance(proto, BSMProtocol):
                 proto.stop()
@@ -155,6 +176,8 @@ class DQCProtocol(LocalProtocol):
                 if proto.is_running:
                     proto.stop()
             elif isinstance(proto, QPUProtocol):
+                if proto in idle_qpu_protos and proto.is_running:
+                    proto.stop()
                 for bsm_lbl, worker in list(proto._bsm_workers.items()):
                     if worker.is_running:
                         worker.stop()

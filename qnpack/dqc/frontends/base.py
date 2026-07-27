@@ -7,7 +7,7 @@ Concrete shared behaviour lives here so that TketFrontend and QASM3Frontend
 only implement what is genuinely different between them.
 """
 
-from abc import ABC, abstractmethod
+from abc import ABC
 import logging
 
 log = logging.getLogger(__name__)
@@ -69,7 +69,6 @@ class BaseFrontend(ABC):
 
     # ── Abstract interface ───────────────────────────────────────────────────
 
-    @abstractmethod
     def parse(self, qpu_info=None):
         """Parse the previously loaded source and return the canonical per-QPU
         command dict.
@@ -87,13 +86,14 @@ class BaseFrontend(ABC):
         dict[int, list[dict]]
             ``{qpu_id: [cmd, …]}`` using canonical op names.
         """
+        return {}
 
     @property
-    @abstractmethod
     def needs_datacollector(self):
         """``True`` when the frontend requires a NetSquid DataCollector to
         harvest results (tket-Circuit mode); ``False`` when results are read
         directly from QPU protocol state after the run."""
+        return False
 
     # ── Output-register metadata ─────────────────────────────────────────────
 
