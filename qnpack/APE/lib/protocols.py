@@ -50,7 +50,10 @@ class ControlProtocol(NodeProtocol):
         num_bsm = self.num_repeater+1
         for n in range(num_bsm):
             cport = self.node.ports[f"cport_from_bsm{n}"]
-            ev_expr |= self.await_port_input(cport)
+            if ev_expr is None:
+                ev_expr = self.await_port_input(cport)
+            else:
+                ev_expr |= self.await_port_input(cport)
         waiting = num_bsm*2  # Each bsm contains two protocols (left and right) to send message to control node
         while waiting:
             log.debug("waiting for message in control node", ev_expr)
