@@ -1,12 +1,12 @@
 from netsquid.qubits.ketstates import BellIndex
-from netsquid_trappedions.instructions import IonTrapMSGate, IonTrapMultiQubitRotation
+from netsquid_trappedions.instructions import IonTrapIndividualMSGate, IonTrapMultiQubitRotation
 from netsquid.components.instructions import INSTR_ROT_Z, INSTR_MEASURE, INSTR_EMIT, INSTR_MEASURE_BELL
 from netsquid.components import QuantumProgram, INSTR_INIT
 import logging
 import numpy as np
 import random as rand
 # import matplotlib.pyplot as plt
-from netsquid_trappedions.ion_trap import IonTrap
+from netsquid_trappedions.ion_trap import IonTrapBase, IonTrapBaseConfig
 from netsquid.qubits import qubitapi as qapi
 # from netsquid.qubits import ketstates as ks
 from netsquid.qubits.state_sampler import StateSampler
@@ -27,7 +27,7 @@ import random
 
 log = logging.getLogger(__name__)
 
-ms_instruction = IonTrapMSGate(2, np.pi / 2)
+ms_instruction = IonTrapIndividualMSGate(theta=np.pi / 2)
 
 
 class InitProgram(QuantumProgram):
@@ -69,19 +69,18 @@ class AdvIonTrapSwapProgram(QuantumProgram):
     default_num_qubits = 2
     _NAME_OUTCOME_CONTROL = "control-qubit-outcome"
     _NAME_OUTCOME_TARGET = "target-qubit-outcome"
-    _OUTCOME_TO_BELL_INDEX = {(1, 1): BellIndex.PHI_PLUS, (0, 1): BellIndex.PSI_PLUS,
-                              (1, 0): BellIndex.PSI_MINUS, (0, 0): BellIndex.PHI_MINUS}
+    _OUTCOME_TO_BELL_INDEX = {(1, 1): BellIndex.B00, (0, 1): BellIndex.B01,
+                              (0, 0): BellIndex.B10, (1, 0): BellIndex.B11}
     keep_measured_qubits = False
 
     def program(self):
         q1, q2 = self.get_qubit_indices(2)
-        self.apply(INSTR_ROT_Z, q1, angle=np.pi / 4)
-        self.apply(INSTR_ROT_Z, q2, angle=-np.pi / 4)
-        self.apply(ms_instruction, qubit_indices=[q1, q2])
+        self.apply(INSTR_ROT_Z, q2, angle=-np.pi / 2)
+        self.apply(ms_instruction, qubit_indices=[q1, q2], phi=0)
         self.apply(INSTR_MEASURE, q1, output_key=self._NAME_OUTCOME_CONTROL,
-                   keep=self.keep_measured_qubits)
+                   inplace=self.keep_measured_qubits)
         self.apply(INSTR_MEASURE, q2, output_key=self._NAME_OUTCOME_TARGET,
-                   keep=self.keep_measured_qubits)
+                   inplace=self.keep_measured_qubits)
         yield self.run()
         self.output["bell_index"] = self.get_outcome_as_bell_index
 
@@ -208,22 +207,31 @@ class AdvRetryEmitProgram(QuantumProgram):
         yield self.run()
 
 
-class Adv_Ion_Trap(IonTrap):
+class Adv_Ion_Trap(IonTrapBase):
     # extend ion trap class for fallback_to_nonphysical
     def __init__(self, cfg, noise_model, num_positions, coherence_time=0., init_depolar_prob=0., rot_z_depolar_prob=0.,
                  multi_qubit_xy_rotation_depolar_prob=0., ms_depolar_prob=0., emission_fidelity=1., measurement_duration=0,
                  collection_efficiency=1., emission_duration=0., ms_pi_over_2_duration=0, initialization_duration=0.,
                  prob_error_0=0., prob_error_1=0., z_depolar_prob=0, x_depolar_prob=0, z_gate_duration=0, x_gate_duration=0,
                  retry_duration=0, fallback_to_nonphysical=False):
-        super().__init__(num_positions=num_positions, coherence_time=coherence_time, prob_error_0=prob_error_0,
-                         prob_error_1=prob_error_1, init_depolar_prob=init_depolar_prob,
-                         rot_z_depolar_prob=rot_z_depolar_prob,
-                         multi_qubit_xy_rotation_depolar_prob=multi_qubit_xy_rotation_depolar_prob,
-                         ms_depolar_prob=ms_depolar_prob, emission_fidelity=emission_fidelity,
-                         collection_efficiency=collection_efficiency, emission_duration=emission_duration,
-                         measurement_duration=measurement_duration, initialization_duration=initialization_duration,
-                         z_rotation_duration=0., ms_pi_over_2_duration=ms_pi_over_2_duration,
-                         multi_qubit_xy_rotation_duration=0., ms_optimization_angle=np.pi / 2)
+        config = IonTrapBaseConfig(
+            num_positions=num_positions,
+            coherence_time=coherence_time,
+            prob_error_0=prob_error_0,
+            prob_error_1=prob_error_1,
+            init_depolar_prob=init_depolar_prob,
+            rot_z_depolar_prob=rot_z_depolar_prob,
+            ms_depolar_prob=ms_depolar_prob,
+            emission_fidelity=emission_fidelity,
+            collection_efficiency=collection_efficiency,
+            emission_duration=emission_duration,
+            measurement_duration=measurement_duration,
+            initialization_duration=initialization_duration,
+            z_rotation_duration=0.,
+            ms_pi_over_2_duration=ms_pi_over_2_duration,
+            ms_optimization_angle=np.pi / 2,
+        )
+        super().__init__(config)
         self.cfg = cfg
         self.noise_model = noise_model
         emit_topologies = [(ion_position, self.emission_position)
@@ -234,7 +242,7 @@ class Adv_Ion_Trap(IonTrap):
         emit_instruction1 = PhysicalInstruction(instruction=ADV_EMIT_RETRY,
                                                duration=retry_duration,
                                                topology=emit_topologies,
-                                               q_noise_model = CustomEmissionNoiseModel(emission_fidelity=self.properties["emission_fidelity"],
+                                               quantum_noise_model=CustomEmissionNoiseModel(emission_fidelity=self.properties["emission_fidelity"],
                                                collection_efficiency=self.properties["collection_efficiency"]))
         # choose topologies such that auxiliary emission position ("cavity") is excluded
         one_ion_topologies = list(range(self.num_ions))
@@ -247,22 +255,35 @@ class Adv_Ion_Trap(IonTrap):
         emit_topologies = [(ion_position, self.emission_position)
                            for ion_position in range(self.num_ions)]
 
+        # Add MS gate physical instruction (needed for swap programs)
+        neighboring_ion_topologies = [tuple([i, i + 1]) for i in range(self.num_ions - 1)]
+        neighboring_ion_topologies += [tuple([i + 1, i]) for i in range(self.num_ions - 1)]
+        ms_gate_phys = PhysicalInstruction(
+            instruction=IonTrapIndividualMSGate(theta=np.pi / 2),
+            duration=ms_pi_over_2_duration,
+            quantum_noise_model=DepolarNoiseModel(ms_depolar_prob, time_independent=True),
+            classical_noise_model=None,
+            parallel=False,
+            apply_q_noise_after=True,
+            topology=neighboring_ion_topologies)
+
         x_gate_instruction = PhysicalInstruction(instruction=INSTR_X, duration=z_gate_duration,
                                                  parallel=False,
-                                                 q_noise_model=DepolarNoiseModel(z_depolar_prob,
-                                                                                 time_independent=True),
+                                                 quantum_noise_model=DepolarNoiseModel(z_depolar_prob,
+                                                                                      time_independent=True),
                                                  apply_q_noise_after=False,
                                                  topology=one_ion_topologies)
         z_gate_instruction = PhysicalInstruction(instruction=INSTR_Z, duration=x_gate_duration,
                                                  parallel=False,
-                                                 q_noise_model=DepolarNoiseModel(x_depolar_prob,
-                                                                                 time_independent=True),
+                                                 quantum_noise_model=DepolarNoiseModel(x_depolar_prob,
+                                                                                      time_independent=True),
                                                  apply_q_noise_after=False,
                                                  topology=one_ion_topologies)
         self.add_physical_instruction(emit_instruction)
         self.add_physical_instruction(x_gate_instruction)
         self.add_physical_instruction(z_gate_instruction)
         self.add_physical_instruction(emit_instruction1)
+        self.add_physical_instruction(ms_gate_phys)
 
     def doppler_cooling(self, initial_velocity=None, ion_mass=None,
                         decay_rate=None, rabi_frequency=None,
