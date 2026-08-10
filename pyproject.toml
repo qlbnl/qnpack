@@ -9,10 +9,11 @@ description = "Quantum Network Repeater Simulation Package"
 readme = "README.md"
 license = "BSD-3-Clause-LBNL"
 license-files = ["LICENSE", "COPYRIGHT"]
-requires-python = ">=3.7"
+requires-python = ">=3.12,<3.13"
 authors = [
     { name = "Charu Jain" },
     { name = "Chuen Hei Chan" },
+    { name = "Se-young Yu" },
     { name = "Ezra Kissel" },
     { name = "Wenji Wu" },
 ]
@@ -25,12 +26,18 @@ classifiers = [
     "Intended Audience :: Developers",
     "Natural Language :: English",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.12",
 ]
-dynamic = ["dependencies"]
+dependencies = [
+    "munch==4.0.0",
+    "pyyaml",
+    "networkx",
+    "matplotlib",
+    "netsquid==1.1.8",
+    "netsquid-trappedions==4.0.0",
+    "pytket",
+    "openqasm3[parser]"
+]
 
 [project.urls]
 Homepage = "https://github.com/quant-net/repeater-simulations"
@@ -39,8 +46,13 @@ Homepage = "https://github.com/quant-net/repeater-simulations"
 qnpack = "qnpack.qnpack:main"
 dqc-sim = "qnpack.dqc.sim:main"
 
-[tool.setuptools.dynamic]
-dependencies = { file = ["requirements.txt"] }
-
 [tool.setuptools.packages.find]
 include = ["qnpack", "qnpack.*"]
+
+[[tool.uv.index]]
+name = "netsquid"
+url = "https://pypi.netsquid.org/"
+
+[tool.uv.sources]
+netsquid = { index = "netsquid" }
+netsquid-trappedions = { index = "netsquid" }

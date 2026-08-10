@@ -109,19 +109,66 @@ Provided as Jupyter Notebooks:
 
 #### JupyterHub (JH)
 
-QNPack is pre-installed inside the JupyterHub container image.  
+QNPack is pre-installed inside the JupyterHub container image.
 If you're using JupyterHub, you can run the example notebooks without any setup.
 
-#### Source Installation
+#### NetSquid Registry Authentication
 
-1. **Install NetSquid and Dependencies**  
-   Register at [http://netsquid.org](http://netsquid.org) and install the following packages:
+NetSquid packages are hosted on a private PyPI registry at `https://pypi.netsquid.org`.
+You must first register for an account at [https://netsquid.org](https://netsquid.org), then
+configure authentication via a `~/.netrc` file:
+
+```bash
+cat > ~/.netrc << 'EOF'
+machine pypi.netsquid.org
+  login YOUR_NETSQUID_USERNAME
+  password YOUR_NETSQUID_PASSWORD
+EOF
+chmod 600 ~/.netrc
+```
+
+Replace `YOUR_NETSQUID_USERNAME` and `YOUR_NETSQUID_PASSWORD` with your netsquid.org credentials.
+This file is used automatically by both `uv` and `pip` for registry authentication.
+
+#### Installation with uv (Recommended)
+
+[uv](https://docs.astral.sh/uv/) provides fast, reproducible Python environment management.
+QNPack is pre-configured with a `[[tool.uv.index]]` entry in `pyproject.toml` that points to the
+netsquid private registry, so all dependencies (including `netsquid` and `netsquid-trappedions`)
+are resolved automatically.
+
+1. **Install uv** (if not already installed):
+
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+2. **Create the environment and install all dependencies**:
+
+   ```bash
+   uv sync
+   ```
+
+   This creates a `.venv/` in the project directory with Python 3.12 and all packages installed.
+
+3. **Run QNPack**:
+
+   ```bash
+   uv run qnpack --help          # run via the installed console script
+   uv run python script.py       # run any script in the environment
+   source .venv/bin/activate      # or activate the venv traditionally
+   ```
+
+#### Installation with pip
+
+1. **Install NetSquid and Dependencies**
+   Ensure your `~/.netrc` is configured (see above), then install:
 
    ```bash
    pip3 install --extra-index-url https://pypi.netsquid.org netsquid netsquid-trappedions netsquid-netconf
    ```
 
-2. **Install QNPack**  
+2. **Install QNPack**
    From inside the QNPack source directory:
 
    ```bash

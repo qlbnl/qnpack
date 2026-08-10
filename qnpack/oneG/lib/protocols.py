@@ -5,9 +5,8 @@ from enum import IntEnum, auto
 from netsquid.qubits import ketstates as ks
 from netsquid.protocols.nodeprotocols import NodeProtocol, LocalProtocol
 from netsquid.components.component import Message
-from netsquid_trappedions.programs import IonTrapSwapProgram
 from netsquid.protocols.protocol import Signals
-from qnpack.oneG.advanced_ion_trap import AdvRetryEmitProgram
+from qnpack.oneG.advanced_ion_trap import AdvRetryEmitProgram, AdvIonTrapSwapProgram
 from qnpack.oneG.lib.programs import CorrectionProgram
 from qnpack.common.utils import calculate_distances
 from qnpack.common.logging import setup_logging
@@ -426,7 +425,7 @@ class RepeaterEmissionProtocol(NodeProtocol):
 
             # start DBSM
             if self.left_flag and self.right_flag:
-                swap_program = IonTrapSwapProgram()
+                swap_program = AdvIonTrapSwapProgram()
                 # Perform Bell measurement
                 yield self.node.qmemory.execute_program(swap_program, qubit_mapping=[0, 1])
                 log.debug(
@@ -469,12 +468,18 @@ class ControlProtocol(NodeProtocol):
         ev_expr = None
         for i in range(0, len(self.r_nodes)):
             cport = self.node.ports[f"from_{self.r_nodes[i]}"]
-            ev_expr |= self.await_port_input(cport)
+            if ev_expr is None:
+                ev_expr = self.await_port_input(cport)
+            else:
+                ev_expr |= self.await_port_input(cport)
         self._wait(ExpressionHandler(self.handle_dbsm), expression=ev_expr)
         ev_expr1 = None
         for i in range(0, 2):
             cport1 = self.node.ports[f"to_q{i+1}"]
-            ev_expr1 |= self.await_port_input(cport1)
+            if ev_expr1 is None:
+                ev_expr1 = self.await_port_input(cport1)
+            else:
+                ev_expr1 |= self.await_port_input(cport1)
         self._wait(ExpressionHandler(self.handle_endres), expression=ev_expr1)
 
     def send_ctrl_msg(self, nname, msg=""):
@@ -484,7 +489,10 @@ class ControlProtocol(NodeProtocol):
         ev_expr = None
         for n in nodes:
             cport = self.node.ports[f"from_{n}"]
-            ev_expr |= self.await_port_input(cport)
+            if ev_expr is None:
+                ev_expr = self.await_port_input(cport)
+            else:
+                ev_expr |= self.await_port_input(cport)
         waiting = len(nodes)
         while waiting:
             yield ev_expr

@@ -183,6 +183,8 @@ class IonTrapSimulation(Simulation):
             error_count = 0
             # Run trials
             fidelities, times, success_times, num_retries = [], [], [], []
+            total_time = 0
+            rate = 0
             rows_added = False
             diff = 0
             for i in range(self.cfg.sim.iterations):
@@ -200,16 +202,19 @@ class IonTrapSimulation(Simulation):
                     ns.set_random_state()
                     protocol.reset()
     
-                    # Reinitialize quantum states
+                    # Reinitialize quantum states (create_qubits needed after reset clears memory)
                     node_q1.subcomponents['ion_trap_quantum_communication_device'].resample()
+                    node_q1.subcomponents['ion_trap_quantum_communication_device'].create_qubits(node_name="QNode_1")
                     node_q1.subcomponents['ion_trap_quantum_communication_device'].state_initialization(node_name="QNode_1")
                     node_q2.subcomponents['ion_trap_quantum_communication_device'].resample()
+                    node_q2.subcomponents['ion_trap_quantum_communication_device'].create_qubits(node_name="QNode_2")
                     node_q2.subcomponents['ion_trap_quantum_communication_device'].state_initialization(node_name="QNode_2")
     
                     # Reset repeater nodes
                     for r_node_name in sorted(r_nodes):
                         r_node = network.get_node(r_node_name)
                         r_node.subcomponents['ion_trap_quantum_communication_device'].resample()
+                        r_node.subcomponents['ion_trap_quantum_communication_device'].create_qubits(node_name=r_node_name)
                         r_node.subcomponents['ion_trap_quantum_communication_device'].state_initialization(node_name=r_node_name, topo=[0, 1])
                 ns.sim_run()
                 try:
@@ -279,6 +284,8 @@ class IonTrapSimulation(Simulation):
             else:
                 sem_fidelity = 0
                 mean_fidelity = 0
+                mean_time = 0
+                mean_retries = 0
             # Store results
             final_data.append({
                 **param_dict,  # Store the varying parameters
