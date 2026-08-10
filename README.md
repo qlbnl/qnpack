@@ -1,7 +1,7 @@
-# QNPack: Modeling and Simulation of Quantum Repeater Networks
+# QNPack: Modeling and Simulation of Quantum Networks
 
-QNPack is a simulation toolkit for modeling and analyzing both **1G (memory-based)** and **All-Photonic** quantum repeater architectures.  
-It enables rapid prototyping and experimentation using NetSquid-based simulations, supporting advanced concepts such as entanglement swapping, purification, and error correction.
+QNPack is a simulation toolkit for modeling and analyzing both **1G (memory-based)** and **All-Photonic** quantum repeater architectures.  QNPack has also been extended to include a DQC modeling layer that draws from the existing quantum repeater protocols.
+The package enables rapid prototyping and experimentation using NetSquid-based simulations, supporting advanced concepts such as entanglement swapping, purification, and error correction.
 
 ---
 
@@ -23,6 +23,53 @@ It enables rapid prototyping and experimentation using NetSquid-based simulation
   - **Entanglement Swapping**
   - **Entanglement Purification**
 - Photon-mediated entanglement links between nodes
+
+### 3. Distributed Quantum Computing (DQC)
+
+The `qnpack.dqc` module extends QNPack with a full **distributed quantum computing** simulation layer.  It models multi-QPU execution of quantum circuits where non-local (inter-QPU) gates are realized through entanglement-assisted protocols over quantum network links.
+
+#### Architecture
+
+- **Controller–QPU–BSM model**: A central controller dispatches per-QPU command streams to multiple QPU nodes, coordinating entanglement generation through intermediate Bell State Measurement (BSM) nodes.
+- **Quantum & classical switching**: An optional `FullMeshOpticalSwitch` routes photons between QPUs and BSMs, with a companion `ClassicalSwitch` for clock signals and measurement results.  Entanglement requests are managed by an `EntanglementQueue` that supports parallel BSM utilization.
+- **Topology-driven network construction**: Network layout (QPU sites, BSM nodes, channel lengths, qubit counts, noise parameters) is defined in a JSON topology file.  `QPUNodeBuilder` and `create_bsm_nodes_from_topology` construct the NetSquid network from this specification.
+
+#### Circuit Frontends
+
+DQC accepts circuits through two pluggable frontends:
+
+| Frontend | Input | Description |
+|----------|-------|-------------|
+| **TketFrontend** | pytket `Circuit` objects or `dist_commands.txt` files | Uses pytket-dqc for circuit partitioning across QPUs with EJPP (Entanglement-assisted Joint Phase Protocol) operations. |
+| **QASM3Frontend** | OpenQASM 3.0 files with per-QPU qubit registers | Parses pre-partitioned QASM 3.0 programs via the `openqasm3` AST. |
+
+Both frontends emit a **canonical per-QPU command IR** that is processed by a unified labeling layer (`qnpack.dqc.labeling`) to assign entanglement labels, EJPP start/end labels, and cross-QPU classical message exchange labels before execution.
+
+#### Included Algorithms
+
+Ready-to-run algorithm generators are provided in `qnpack.dqc.algorithms`:
+
+- **Grover's search** — scalable multi-qubit search with ancilla-based decomposition (4–12+ qubits, 1–3 QPUs)
+- **Bernstein–Vazirani** — hidden-string identification via the BV algorithm
+- **QAOA (MaxCut)** — multi-layer Quantum Approximate Optimization for graph MaxCut problems
+
+Pre-built distributed command files and QASM circuits for various qubit/QPU configurations are included in `commands/` and `qasm/`.
+
+#### Noise & Validation
+
+- Configurable noise models: gate depolarization, T1/T2 memory decoherence, fiber loss, emission fidelity, and BSM detection parameters — all specified in `parameters.yml`.
+- Pre-simulation **command validation** (`qnpack.dqc.models.validation`) checks the canonical IR against a registered instruction set before execution.
+- Pre-scheduling of entanglement generation to overlap with local gate execution, reducing circuit latency.
+
+#### CLI Entry Point
+
+```bash
+dqc-sim                        # run via the installed console script
+# or
+python -m qnpack.dqc.sim      # run as a module
+```
+
+Configuration is driven by `parameters.yml` (simulation, circuit, QPU, memory, channel, BSM settings) and a topology JSON file.
 
 ---
 
@@ -78,8 +125,5 @@ If you're using JupyterHub, you can run the example notebooks without any setup.
    From inside the QNPack source directory:
 
    ```bash
-   pip3 install -r requirements.txt
    pip install -e .
    ```
-
----
